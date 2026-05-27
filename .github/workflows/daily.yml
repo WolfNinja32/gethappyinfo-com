@@ -1,0 +1,40 @@
+name: Daily joy update
+
+on:
+  schedule:
+    # 13:00 UTC ≈ 06:00 America/Los_Angeles (a touch later under PST). GitHub may
+    # delay scheduled runs under load; exact minute doesn't matter for a daily site.
+    - cron: "0 13 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: daily-joy
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Refresh joy.json
+        run: python scripts/update_joy.py
+
+      - name: Commit if changed
+        run: |
+          git config user.name "gethappyinfo-bot"
+          git config user.email "bot@gethappyinfo.com"
+          if [[ -n "$(git status --porcelain public/joy.json data/recent.json)" ]]; then
+            git add public/joy.json data/recent.json
+            git commit -m "Daily joy update ($(date -u +%Y-%m-%d))"
+            git push
+          else
+            echo "No changes to commit."
+          fi
