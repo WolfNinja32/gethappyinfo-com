@@ -13,8 +13,13 @@
   <meta property="og:image" content="https://gethappyinfo.com/og-image.png" />
   <meta property="og:image:width" content="2172" />
   <meta property="og:image:height" content="724" />
+  <meta property="og:image:alt" content="Get Happy Info - A daily postcard of good news and kind acts" />
+  <meta property="og:site_name" content="Get Happy Info" />
+  <meta property="og:locale" content="en_US" />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:image" content="https://gethappyinfo.com/og-image.png" />
+  <meta name="twitter:site" content="@gethappyinfo" />
+  <meta name="twitter:creator" content="@gregorydcollins" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>%F0%9F%8C%9E</text></svg>" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -530,6 +535,12 @@
           .replace(/'/g, '&#39;');
       }
 
+      function updateOGTags(title, description, url) {
+        document.querySelector('meta[property="og:title"]').content = title;
+        document.querySelector('meta[property="og:description"]').content = description;
+        document.querySelector('meta[property="og:url"]').content = url;
+      }
+
       // Only http(s) links are allowed through to href — blocks javascript:,
       // data:, and other script-bearing schemes if a feed item is ever tainted.
       function safeUrl(u) {
@@ -566,7 +577,11 @@
             ? 'gethappyinfo.com · no. ' + days
             : 'gethappyinfo.com · ' + parts.iso;
           shareUrl = window.location.origin + '/' + parts.iso;
-          document.title = 'Get Happy Info — ' + parts.monthShort + ' ' + parts.day + ', ' + parts.year;
+          var pageTitle = 'Get Happy Info — ' + parts.monthShort + ' ' + parts.day + ', ' + parts.year;
+          document.title = pageTitle;
+          if (archiveDate) {
+            updateOGTags(pageTitle, data.dailyTask || fallbackTask, shareUrl);
+          }
         }
       }
 
@@ -578,7 +593,10 @@
           postmarkDate.textContent = parts.monthShort + ' ' + parts.day;
           postmarkYear.textContent = parts.year;
           editionEl.textContent = 'gethappyinfo.com · ' + reqDate;
-          document.title = 'Get Happy Info — ' + parts.monthShort + ' ' + parts.day + ', ' + parts.year;
+          var pageTitle = 'Get Happy Info — ' + parts.monthShort + ' ' + parts.day + ', ' + parts.year;
+          document.title = pageTitle;
+          shareUrl = window.location.origin + '/' + reqDate;
+          updateOGTags(pageTitle, 'No postcard from that day — yet.', shareUrl);
         }
       }
 
