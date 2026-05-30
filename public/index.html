@@ -465,7 +465,7 @@
           <p class="micro-joy" id="task">Loading a little joy…</p>
           <div class="signature">
             <span class="line">Yours in joy,</span>
-            <span class="line flourish">~ the day</span>
+            <span class="line flourish">~ Get Happy</span>
           </div>
         </section>
 
@@ -612,19 +612,22 @@
       }
 
       sendBtn.addEventListener('click', async function () {
-        var text = "A postcard of good — from gethappyinfo.com";
+        var text = "Take a look at the Happiness Postcard site I found.";
+        var shareMessage = text + ' ' + shareUrl;
         try {
           if (navigator.share) {
+            // text and url stay separate so the receiving app composes them
+            // itself (and doesn't double-print the link).
             await navigator.share({ title: 'Get Happy Info', text: text, url: shareUrl });
           } else if (navigator.clipboard && navigator.clipboard.writeText) {
-            await navigator.clipboard.writeText(shareUrl);
+            await navigator.clipboard.writeText(shareMessage);
             var original = sendBtn.innerHTML;
-            sendBtn.textContent = '✓ link copied';
+            sendBtn.textContent = '✓ message copied';
             setTimeout(function () { sendBtn.innerHTML = original; }, 1800);
           } else {
             // No share or clipboard API (older / non-secure context): surface the
-            // URL so the visitor can copy it by hand rather than the button no-opping.
-            window.prompt('Copy this link to share:', shareUrl);
+            // message so the visitor can copy it by hand rather than the button no-opping.
+            window.prompt('Copy this to share:', shareMessage);
           }
         } catch (e) { /* user cancelled or unsupported */ }
       });
