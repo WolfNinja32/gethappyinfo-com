@@ -484,7 +484,7 @@
       </footer>
 
     </article>
-    <div class="colophon">© Gregory D. Collins</div>
+    <div class="colophon">© <span id="copyright-year">2026</span> Gregory D. Collins</div>
   </main>
 
   <script>
@@ -496,6 +496,11 @@
       var postmarkYear = document.getElementById('postmark-year');
       var sendBtn = document.getElementById('send');
       var todayLink = document.getElementById('today-link');
+
+      // Keep the colophon year current without yearly edits (2026 is the
+      // no-JS fallback baked into the markup).
+      var yearEl = document.getElementById('copyright-year');
+      if (yearEl) yearEl.textContent = new Date().getFullYear();
 
       var fallbackTask = 'Do one small, kind thing for someone today.';
       var shareUrl = window.location.origin + '/';
