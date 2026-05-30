@@ -2,9 +2,11 @@ name: Daily joy update
 
 on:
   schedule:
-    # 13:00 UTC ≈ 06:00 America/Los_Angeles (a touch later under PST). GitHub may
-    # delay scheduled runs under load; exact minute doesn't matter for a daily site.
-    - cron: "0 13 * * *"
+    # 12:00 UTC = 05:00 PDT (Mar–Nov) / 04:00 PST (Nov–Mar). GitHub Actions cron
+    # is UTC-only, so 5 AM Pacific can only be exact for one DST half — picked
+    # the PDT half since it's ~8 months/year. GitHub may delay scheduled runs
+    # 10–30 min under load; exact minute doesn't matter for a daily site.
+    - cron: "0 12 * * *"
   workflow_dispatch: {}
 
 permissions:
@@ -31,8 +33,8 @@ jobs:
         run: |
           git config user.name "gethappyinfo-bot"
           git config user.email "bot@gethappyinfo.com"
-          if [[ -n "$(git status --porcelain public/joy.json data/recent.json)" ]]; then
-            git add public/joy.json data/recent.json
+          if [[ -n "$(git status --porcelain public/joy.json public/joy-archive.json data/recent.json)" ]]; then
+            git add public/joy.json public/joy-archive.json data/recent.json
             git commit -m "Daily joy update ($(date -u +%Y-%m-%d))"
             git push
           else
