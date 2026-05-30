@@ -1,0 +1,22 @@
+{
+  "days": {
+    "2026-05-28": {
+      "dailyTask": "Send a voice message instead of a text \u2014 let them hear you smile.",
+      "lastUpdated": "2026-05-28",
+      "topNews": [
+        {
+          "text": "Good News in History, May 28",
+          "url": "https://www.goodnewsnetwork.org/events060528"
+        },
+        {
+          "text": "Italy Unifies its Historic Pilgrimage Trails to Offer Slower, More Intimate Tourism",
+          "url": "https://www.goodnewsnetwork.org/italys-newly-unified-historic-pilgrimage-trail-network-offers-a-slower-more-intimate-italian-tourism"
+        },
+        {
+          "text": "Facing Desertification, Man\u2019s Campaign Draws 30,000 Volunteers to Plant 1 Million Trees in his County",
+          "url": "https://www.goodnewsnetwork.org/30000-volunteers-respond-to-countys-call-to-help-combat-desertification-and-plant-1-million-trees"
+        }
+      ]
+    }
+  }
+}

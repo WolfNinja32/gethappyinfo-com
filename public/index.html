@@ -2,94 +2,632 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Get Happy Info — a daily dose of good</title>
+  <title>Get Happy Info — a daily postcard of good</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="description" content="One small act of kindness and a few pieces of good news, refreshed every day. Spread happiness and joy." />
+  <meta name="description" content="A small daily postcard: one kind act and a few pieces of good news, sent to your screen every morning." />
   <meta name="color-scheme" content="light" />
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>%E2%98%80%EF%B8%8F</text></svg>" />
+  <meta property="og:title" content="Get Happy Info — a daily postcard of good" />
+  <meta property="og:description" content="One kind act, three pieces of good news. Sent to your screen every morning." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://gethappyinfo.com/" />
+  <meta property="og:image" content="https://gethappyinfo.com/og-image.png" />
+  <meta property="og:image:width" content="2172" />
+  <meta property="og:image:height" content="724" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:image" content="https://gethappyinfo.com/og-image.png" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>%F0%9F%8C%9E</text></svg>" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,400;1,9..144,500;1,9..144,600&family=Caveat:wght@500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <style>
-    :root { --accent: #ffcc00; --ink: #33312b; --muted: #8a857a; }
-    * { box-sizing: border-box; }
-    body {
-      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-      display: flex; justify-content: center; align-items: center;
-      min-height: 100vh; margin: 0; padding: 1.5rem;
-      background: linear-gradient(135deg, #fff9e3 0%, #ffffff 100%);
-      color: var(--ink); line-height: 1.5;
+    :root {
+      --paper: #efe6d2;
+      --paper-deep: #e3d6b6;
+      --ink: #2a3a48;
+      --ink-soft: #557082;
+      --postal-red: #a13a2b;
+      --postal-red-ink: rgba(161, 58, 43, 0.55);
+      --ocean: #36556b;
+      --kraft: #c4a884;
+      --table: #20303a;
+      --rest-rotate: -0.55deg;
     }
-    main { max-width: 520px; width: 100%; text-align: center; }
-    h1 {
-      font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1.5px;
-      color: var(--muted); font-weight: 600; margin: 2rem 0 0.75rem;
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Fraunces', Georgia, serif;
+      min-height: 100vh;
+      background:
+        radial-gradient(ellipse 80% 60% at 50% 30%, #3a5564 0%, #243743 55%, var(--table) 100%);
+      color: var(--ink);
+      line-height: 1.5;
+      padding: 3.5rem 1.25rem 4rem;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+    }
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      pointer-events: none;
+      background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.2 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+      opacity: 0.5;
+      mix-blend-mode: overlay;
+      z-index: 0;
+    }
+
+    main {
+      position: relative;
+      z-index: 1;
+      max-width: 760px;
+      width: 100%;
+    }
+
+    .postcard {
+      position: relative;
+      background: var(--paper);
+      background-image:
+        radial-gradient(ellipse at 18% 8%, rgba(196,168,132,0.28) 0%, transparent 45%),
+        radial-gradient(ellipse at 85% 95%, rgba(161,58,43,0.07) 0%, transparent 50%),
+        url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'><filter id='p'><feTurbulence type='fractalNoise' baseFrequency='0.7' numOctaves='3'/><feColorMatrix values='0 0 0 0 0.55  0 0 0 0 0.45  0 0 0 0 0.3  0 0 0 0.13 0'/></filter><rect width='100%25' height='100%25' filter='url(%23p)'/></svg>");
+      border-radius: 4px;
+      padding: 2.5rem 2.25rem 2rem;
+      box-shadow:
+        inset 0 0 0 1px rgba(42, 58, 72, 0.08),
+        0 35px 70px -25px rgba(0,0,0,0.65),
+        0 14px 22px -12px rgba(0,0,0,0.45);
+      transform: rotate(var(--rest-rotate));
+      animation: postcardIn 1s cubic-bezier(.2,.7,.2,1) both;
+    }
+    @keyframes postcardIn {
+      from { opacity: 0; transform: rotate(var(--rest-rotate)) translateY(28px) scale(0.985); }
+      to   { opacity: 1; transform: rotate(var(--rest-rotate)) translateY(0) scale(1); }
+    }
+
+    .postcard::before, .postcard::after {
+      content: '';
+      position: absolute;
+      width: 14px; height: 14px;
+      border: 1px solid var(--postal-red-ink);
+      pointer-events: none;
+    }
+    .postcard::before { top: 12px; left: 12px; border-right: none; border-bottom: none; }
+    .postcard::after  { bottom: 12px; right: 12px; border-left: none; border-top: none; }
+
+    .header {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 1.25rem;
+      align-items: start;
+      margin-bottom: 1.75rem;
+      padding-bottom: 1.25rem;
+      border-bottom: 1.5px solid var(--ocean);
+      position: relative;
+    }
+    .header::after {
+      content: '';
+      position: absolute;
+      left: 0; right: 0; bottom: -5px;
+      height: 1px;
+      background: var(--ocean);
+      opacity: 0.35;
+    }
+
+    .masthead { padding-top: 0.4rem; }
+    .kicker {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.7rem;
+      letter-spacing: 0.32em;
+      text-transform: uppercase;
+      color: var(--ocean);
+      font-weight: 500;
+    }
+    .title {
+      font-family: 'Fraunces', serif;
+      font-variation-settings: "opsz" 144, "wght" 600;
+      font-size: clamp(1.85rem, 4.6vw, 2.55rem);
+      line-height: 1;
+      color: var(--ink);
+      margin: 0.55rem 0 0.45rem;
+      letter-spacing: -0.018em;
+    }
+    .title em {
+      font-style: italic;
+      font-variation-settings: "opsz" 144, "wght" 500;
+      color: var(--postal-red);
+    }
+    .subtitle {
+      font-family: 'Fraunces', serif;
+      font-style: italic;
+      font-size: 0.98rem;
+      color: var(--ink-soft);
+      font-variation-settings: "opsz" 14, "wght" 400;
+    }
+
+    .philately {
+      position: relative;
+      width: 112px;
+      height: 132px;
+      flex-shrink: 0;
+      animation: stampIn 1s 0.3s cubic-bezier(.2,.7,.2,1) both;
+    }
+    @keyframes stampIn {
+      from { opacity: 0; transform: rotate(-5deg) translateY(-14px); }
+      to   { opacity: 1; transform: rotate(2.5deg) translateY(0); }
+    }
+    .stamp-svg { display: block; width: 100%; height: 100%; filter: drop-shadow(0 2px 3px rgba(0,0,0,0.18)); }
+
+    .postmark {
+      position: absolute;
+      top: 42px;
+      right: -34px;
+      width: 140px; height: 140px;
+      pointer-events: none;
+      transform: rotate(-14deg);
+      animation: postmarkIn 0.45s 1.15s cubic-bezier(.5, 1.6, .6, 1) both;
+    }
+    @keyframes postmarkIn {
+      0%   { opacity: 0; transform: rotate(-14deg) scale(1.7); }
+      55%  { opacity: 0.85; transform: rotate(-14deg) scale(0.9); }
+      100% { opacity: 0.78; transform: rotate(-14deg) scale(1); }
+    }
+
+    .letter {
+      display: grid;
+      grid-template-columns: 1fr 1.5px 1.2fr;
+      gap: 1.85rem;
+      align-items: start;
+    }
+    .divider {
+      align-self: stretch;
+      background: repeating-linear-gradient(
+        to bottom,
+        var(--ocean) 0 4px,
+        transparent 4px 8px
+      );
+      opacity: 0.45;
+    }
+    .section-label {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.68rem;
+      letter-spacing: 0.28em;
+      text-transform: uppercase;
+      color: var(--postal-red);
+      margin-bottom: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+    }
+    .section-label::before, .section-label::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--postal-red);
+      opacity: 0.4;
+    }
+
+    .note .greeting {
+      font-family: 'Fraunces', serif;
+      font-style: italic;
+      font-size: 1.05rem;
+      color: var(--ink-soft);
+      margin: 0 0 0.85rem;
+      font-variation-settings: "opsz" 24, "wght" 400;
     }
     .micro-joy {
-      background: #fff; padding: 1.75rem 1.5rem; border-radius: 22px;
-      box-shadow: 0 12px 30px rgba(0,0,0,0.06); border: 2px solid var(--accent);
+      font-family: 'Fraunces', serif;
+      font-variation-settings: "opsz" 72, "wght" 500;
+      font-style: italic;
+      font-size: clamp(1.35rem, 3vw, 1.6rem);
+      line-height: 1.3;
+      color: var(--ink);
+      margin: 0 0 1.5rem;
     }
-    .micro-joy p { font-size: 1.45rem; font-weight: 600; margin: 0; }
-    ul.news { list-style: none; padding: 0; margin: 0.5rem 0 0; text-align: left; }
-    ul.news li {
-      padding: 0.85rem 0; border-bottom: 1px solid #f0ead6;
-      font-size: 1.05rem; color: #4a463d;
+    .signature {
+      font-family: 'Caveat', cursive;
+      font-size: 1.55rem;
+      color: var(--postal-red);
+      line-height: 1.05;
+      transform: rotate(-2.5deg);
+      display: inline-block;
+      margin-left: 0.25rem;
     }
-    ul.news li:last-child { border-bottom: 0; }
-    ul.news a {
-      color: inherit; text-decoration: none; display: inline-flex;
-      gap: 0.4rem; align-items: baseline;
+    .signature .line { display: block; }
+    .signature .line.flourish { font-weight: 600; margin-top: 0.1rem; letter-spacing: 0.02em; }
+
+    .news { list-style: none; padding: 0; margin: 0; }
+    .news li {
+      padding: 0.85rem 0;
+      border-bottom: 1px dashed rgba(54, 85, 107, 0.32);
+      opacity: 0;
+      animation: newsIn 0.5s cubic-bezier(.2,.7,.2,1) forwards;
     }
-    ul.news a:hover { text-decoration: underline; }
-    ul.news .arrow { color: var(--muted); font-size: 0.9rem; }
-    .empty { color: var(--muted); font-style: italic; padding: 0.85rem 0; }
-    footer { margin: 2.5rem 0 0.5rem; font-size: 0.78rem; color: var(--muted); }
-    footer a { color: var(--muted); }
+    .news li:nth-child(1) { animation-delay: 0.55s; }
+    .news li:nth-child(2) { animation-delay: 0.7s; }
+    .news li:nth-child(3) { animation-delay: 0.85s; }
+    .news li:nth-child(4) { animation-delay: 1.0s; }
+    .news li:nth-child(5) { animation-delay: 1.15s; }
+    .news li:last-child { border-bottom: 0; }
+    @keyframes newsIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .news a {
+      color: var(--ink);
+      text-decoration: none;
+      font-size: 1rem;
+      line-height: 1.4;
+      display: flex;
+      gap: 0.7rem;
+      align-items: baseline;
+      transition: transform 0.2s ease, color 0.2s ease;
+    }
+    .news a:hover {
+      color: var(--postal-red);
+      transform: translateX(2px);
+    }
+    .news .bullet {
+      color: var(--postal-red);
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.78rem;
+      font-weight: 500;
+      flex-shrink: 0;
+      letter-spacing: 0.05em;
+    }
+    .news .text { flex: 1; }
+    .news .arrow {
+      color: var(--ocean);
+      opacity: 0.55;
+      font-size: 0.9rem;
+      flex-shrink: 0;
+      transition: opacity 0.2s ease;
+    }
+    .news a:hover .arrow { opacity: 1; }
+
+    .empty {
+      color: var(--ink-soft);
+      font-style: italic;
+      padding: 0.85rem 0;
+    }
+
+    .postcard-foot {
+      margin-top: 1.85rem;
+      padding-top: 1.1rem;
+      border-top: 1.5px solid var(--ocean);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1rem;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.7rem;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: var(--ocean);
+    }
+    .send {
+      color: var(--postal-red);
+      text-decoration: none;
+      border: 1px solid var(--postal-red);
+      padding: 0.5rem 0.95rem;
+      border-radius: 2px;
+      cursor: pointer;
+      background: transparent;
+      font: inherit;
+      letter-spacing: 0.22em;
+      transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
+    }
+    .send:hover {
+      background: var(--postal-red);
+      color: var(--paper);
+      transform: translateY(-1px);
+    }
+    .send:active { transform: translateY(0); }
+
+    .today-link {
+      color: var(--ocean);
+      text-decoration: none;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.7rem;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      padding: 0.5rem 0.85rem;
+      border: 1px solid transparent;
+      border-radius: 2px;
+      transition: color 0.2s ease, border-color 0.2s ease;
+    }
+    .today-link:hover {
+      color: var(--postal-red);
+      border-color: var(--postal-red);
+    }
+    .today-link[hidden] { display: none; }
+
+    .colophon {
+      margin-top: 1.5rem;
+      text-align: center;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.62rem;
+      letter-spacing: 0.32em;
+      text-transform: uppercase;
+      color: rgba(239, 230, 210, 0.4);
+    }
+
+    @media (max-width: 620px) {
+      :root { --rest-rotate: -0.3deg; }
+      body { padding: 2rem 0.9rem 3rem; }
+      .postcard { padding: 1.75rem 1.4rem 1.5rem; }
+      .header {
+        grid-template-columns: 1fr;
+        gap: 0.5rem;
+      }
+      .philately {
+        justify-self: end;
+        margin-top: -0.5rem;
+        width: 96px;
+        height: 114px;
+      }
+      .postmark { right: -14px; top: 32px; width: 118px; height: 118px; }
+      .letter {
+        grid-template-columns: 1fr;
+        gap: 1.75rem;
+      }
+      .divider {
+        height: 1px; width: 60%;
+        margin: 0;
+        background: repeating-linear-gradient(to right, var(--ocean) 0 4px, transparent 4px 8px);
+      }
+      .postcard-foot {
+        flex-direction: column;
+        gap: 0.85rem;
+        align-items: flex-start;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, ::before, ::after {
+        animation-duration: 0.001s !important;
+        animation-delay: 0s !important;
+        transition: none !important;
+      }
+    }
   </style>
 </head>
 <body>
   <main>
-    <h1>Today's Micro-Joy</h1>
-    <div class="micro-joy"><p id="task">Loading a little joy…</p></div>
+    <article class="postcard" aria-label="Today's postcard of good">
 
-    <h1>Why the world is good today</h1>
-    <ul class="news" id="news"></ul>
+      <header class="header">
+        <div class="masthead">
+          <div class="kicker">Post · Card</div>
+          <h1 class="title">Get Happy Info<em>.com</em></h1>
+          <div class="subtitle">A daily postcard of good.</div>
+        </div>
 
-    <footer>
-      <span id="updated">gethappyinfo.com</span> — a daily dose of good, updated automatically.
-    </footer>
+        <div class="philately">
+          <svg class="stamp-svg" viewBox="0 0 112 132" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <rect x="6" y="6" width="100" height="120" fill="#f5ecd6" stroke="#a13a2b" stroke-width="0.6"/>
+            <g fill="#efe6d2">
+              <circle cx="11" cy="6" r="3.3"/><circle cx="22" cy="6" r="3.3"/><circle cx="33" cy="6" r="3.3"/><circle cx="44" cy="6" r="3.3"/><circle cx="55" cy="6" r="3.3"/><circle cx="66" cy="6" r="3.3"/><circle cx="77" cy="6" r="3.3"/><circle cx="88" cy="6" r="3.3"/><circle cx="99" cy="6" r="3.3"/>
+              <circle cx="11" cy="126" r="3.3"/><circle cx="22" cy="126" r="3.3"/><circle cx="33" cy="126" r="3.3"/><circle cx="44" cy="126" r="3.3"/><circle cx="55" cy="126" r="3.3"/><circle cx="66" cy="126" r="3.3"/><circle cx="77" cy="126" r="3.3"/><circle cx="88" cy="126" r="3.3"/><circle cx="99" cy="126" r="3.3"/>
+              <circle cx="6" cy="14" r="3.3"/><circle cx="6" cy="26" r="3.3"/><circle cx="6" cy="38" r="3.3"/><circle cx="6" cy="50" r="3.3"/><circle cx="6" cy="62" r="3.3"/><circle cx="6" cy="74" r="3.3"/><circle cx="6" cy="86" r="3.3"/><circle cx="6" cy="98" r="3.3"/><circle cx="6" cy="110" r="3.3"/><circle cx="6" cy="118" r="3.3"/>
+              <circle cx="106" cy="14" r="3.3"/><circle cx="106" cy="26" r="3.3"/><circle cx="106" cy="38" r="3.3"/><circle cx="106" cy="50" r="3.3"/><circle cx="106" cy="62" r="3.3"/><circle cx="106" cy="74" r="3.3"/><circle cx="106" cy="86" r="3.3"/><circle cx="106" cy="98" r="3.3"/><circle cx="106" cy="110" r="3.3"/><circle cx="106" cy="118" r="3.3"/>
+            </g>
+
+            <g transform="translate(56, 50)">
+              <circle r="16" fill="#a13a2b"/>
+              <g stroke="#a13a2b" stroke-width="2" stroke-linecap="round">
+                <line x1="0" y1="-23" x2="0" y2="-28"/>
+                <line x1="0" y1="23" x2="0" y2="28"/>
+                <line x1="-23" y1="0" x2="-28" y2="0"/>
+                <line x1="23" y1="0" x2="28" y2="0"/>
+                <line x1="-16.5" y1="-16.5" x2="-20.5" y2="-20.5"/>
+                <line x1="16.5" y1="-16.5" x2="20.5" y2="-20.5"/>
+                <line x1="-16.5" y1="16.5" x2="-20.5" y2="20.5"/>
+                <line x1="16.5" y1="16.5" x2="20.5" y2="20.5"/>
+              </g>
+              <g fill="none" stroke="#efe6d2" stroke-width="1.6" stroke-linecap="round">
+                <path d="M -7 -3 Q -5 -7 -3 -3"/>
+                <path d="M 3 -3 Q 5 -7 7 -3"/>
+              </g>
+              <path d="M -6.5 2 Q 0 9 6.5 2 Z" fill="#efe6d2"/>
+            </g>
+
+            <text x="56" y="92" text-anchor="middle" font-family="Fraunces, Georgia, serif" font-size="9" font-weight="600" fill="#36556b" letter-spacing="0.8">GET HAPPY</text>
+            <text x="56" y="103" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="6" fill="#36556b" letter-spacing="2">INFO.COM</text>
+            <text x="56" y="117" text-anchor="middle" font-family="Fraunces, Georgia, serif" font-style="italic" font-size="8.5" fill="#a13a2b">1 joy</text>
+          </svg>
+
+          <svg class="postmark" viewBox="0 0 140 140" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <defs>
+              <path id="pmCirc" d="M 70,70 m -52,0 a 52,52 0 1,1 104,0 a 52,52 0 1,1 -104,0"/>
+            </defs>
+            <g fill="none" stroke="#a13a2b" stroke-width="1.4" opacity="0.85">
+              <circle cx="70" cy="70" r="58"/>
+              <circle cx="70" cy="70" r="40"/>
+            </g>
+            <text fill="#a13a2b" opacity="0.85" font-family="IBM Plex Mono, monospace" font-size="7.5" letter-spacing="3">
+              <textPath href="#pmCirc" startOffset="0">GETHAPPYINFO · DAILY JOY · GETHAPPYINFO · DAILY JOY ·</textPath>
+            </text>
+            <text id="postmark-date" x="70" y="65" text-anchor="middle" font-family="Fraunces, Georgia, serif" font-size="13" font-weight="600" fill="#a13a2b" opacity="0.92">MAY 27</text>
+            <text id="postmark-year" x="70" y="84" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="9" fill="#a13a2b" opacity="0.85" letter-spacing="2">2026</text>
+            <g stroke="#a13a2b" stroke-width="1.4" fill="none" opacity="0.7">
+              <path d="M 18,108 Q 35,102 52,108 T 86,108 T 122,108"/>
+              <path d="M 18,115 Q 35,109 52,115 T 86,115 T 122,115"/>
+            </g>
+          </svg>
+        </div>
+      </header>
+
+      <div class="letter">
+        <section class="note" aria-labelledby="note-label">
+          <div id="note-label" class="section-label">a note to you</div>
+          <p class="greeting">Dear friend,</p>
+          <p class="micro-joy" id="task">Loading a little joy…</p>
+          <div class="signature">
+            <span class="line">Yours in joy,</span>
+            <span class="line flourish">~ the day</span>
+          </div>
+        </section>
+
+        <div class="divider" aria-hidden="true"></div>
+
+        <section class="world" aria-labelledby="world-label">
+          <div id="world-label" class="section-label">from the world</div>
+          <ul class="news" id="news"></ul>
+        </section>
+      </div>
+
+      <footer class="postcard-foot">
+        <span id="edition">gethappyinfo.com · daily</span>
+        <a class="today-link" id="today-link" href="/" hidden>← today</a>
+        <button class="send" id="send" type="button" aria-label="Pass this postcard on to a friend">✉ pass it on ↗</button>
+      </footer>
+
+    </article>
+    <div class="colophon">© Gregory D. Collins</div>
   </main>
 
   <script>
     (async function () {
-      const taskEl = document.getElementById("task");
-      const newsEl = document.getElementById("news");
-      const updatedEl = document.getElementById("updated");
-      const fallbackTask = "Do one small, kind thing for someone today.";
-      try {
-        const res = await fetch("/joy.json", { cache: "no-cache" });
-        if (!res.ok) throw new Error("status " + res.status);
-        const data = await res.json();
+      var taskEl = document.getElementById('task');
+      var newsEl = document.getElementById('news');
+      var editionEl = document.getElementById('edition');
+      var postmarkDate = document.getElementById('postmark-date');
+      var postmarkYear = document.getElementById('postmark-year');
+      var sendBtn = document.getElementById('send');
+      var todayLink = document.getElementById('today-link');
 
+      var fallbackTask = 'Do one small, kind thing for someone today.';
+      var shareUrl = window.location.origin + '/';
+
+      // /YYYY-MM-DD permalink → archive lookup; otherwise today.
+      var pathMatch = window.location.pathname.match(/^\/(\d{4}-\d{2}-\d{2})\/?$/);
+      var archiveDate = pathMatch ? pathMatch[1] : null;
+
+      function dateParts(iso) {
+        var m = (iso || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+        if (!m) return null;
+        var months = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+        return {
+          year: m[1],
+          monthShort: months[parseInt(m[2], 10) - 1] || '',
+          day: parseInt(m[3], 10),
+          iso: m[0]
+        };
+      }
+
+      function escapeHtml(s) {
+        return String(s || '')
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#39;');
+      }
+
+      // Only http(s) links are allowed through to href — blocks javascript:,
+      // data:, and other script-bearing schemes if a feed item is ever tainted.
+      function safeUrl(u) {
+        u = String(u || '');
+        return /^https?:\/\//i.test(u) ? encodeURI(u) : '#';
+      }
+
+      function render(data) {
         taskEl.textContent = data.dailyTask || fallbackTask;
 
-        const news = Array.isArray(data.topNews) ? data.topNews : [];
+        var news = Array.isArray(data.topNews) ? data.topNews : [];
         if (news.length === 0) {
           newsEl.innerHTML = '<li class="empty">More good news on the way — check back soon.</li>';
         } else {
-          newsEl.innerHTML = news.map(function (n) {
-            const url = encodeURI(n.url || "#");
-            const text = (n.text || "").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+          newsEl.innerHTML = news.map(function (n, i) {
+            var url = safeUrl(n.url);
+            var text = escapeHtml(n.text);
+            var num = String(i + 1).padStart(2, '0');
             return '<li><a href="' + url + '" target="_blank" rel="noopener noreferrer">'
-              + text + ' <span class="arrow">↗</span></a></li>';
-          }).join("");
+              + '<span class="bullet">' + num + '</span>'
+              + '<span class="text">' + text + '</span>'
+              + '<span class="arrow">↗</span></a></li>';
+          }).join('');
         }
 
-        if (data.lastUpdated) {
-          updatedEl.textContent = "gethappyinfo.com — updated " + data.lastUpdated;
+        var parts = dateParts(data.lastUpdated);
+        if (parts) {
+          postmarkDate.textContent = parts.monthShort + ' ' + parts.day;
+          postmarkYear.textContent = parts.year;
+          var d = new Date(parts.iso + 'T00:00:00Z');
+          var launch = new Date('2026-05-27T00:00:00Z');
+          var days = Math.floor((d - launch) / 86400000) + 1;
+          editionEl.textContent = days > 0
+            ? 'gethappyinfo.com · no. ' + days
+            : 'gethappyinfo.com · ' + parts.iso;
+          shareUrl = window.location.origin + '/' + parts.iso;
+          document.title = 'Get Happy Info — ' + parts.monthShort + ' ' + parts.day + ', ' + parts.year;
+        }
+      }
+
+      function renderArchiveMiss(reqDate) {
+        taskEl.textContent = 'No postcard from that day — yet.';
+        newsEl.innerHTML = '<li class="empty">This day hasn\'t been written. <a href="/" style="color: var(--postal-red); text-decoration: underline;">Read today\'s postcard →</a></li>';
+        var parts = dateParts(reqDate);
+        if (parts) {
+          postmarkDate.textContent = parts.monthShort + ' ' + parts.day;
+          postmarkYear.textContent = parts.year;
+          editionEl.textContent = 'gethappyinfo.com · ' + reqDate;
+          document.title = 'Get Happy Info — ' + parts.monthShort + ' ' + parts.day + ', ' + parts.year;
+        }
+      }
+
+      try {
+        if (archiveDate) {
+          var data = null;
+          try {
+            var archRes = await fetch('/joy-archive.json', { cache: 'no-cache' });
+            // Under Cloudflare's SPA fallback a missing /joy-archive.json returns
+            // index.html (HTTP 200), so .ok is not the real signal — the JSON
+            // parse is. Any fetch/parse failure here means "no archive for this
+            // day", which is the archive-miss case, not the generic error state.
+            if (archRes.ok) {
+              var archive = await archRes.json();
+              data = (archive && archive.days && archive.days[archiveDate]) || null;
+            }
+          } catch (e) { data = null; }
+          if (data) {
+            render(data);
+          } else {
+            renderArchiveMiss(archiveDate);
+          }
+        } else {
+          var res = await fetch('/joy.json', { cache: 'no-cache' });
+          if (!res.ok) throw new Error('status ' + res.status);
+          render(await res.json());
         }
       } catch (err) {
-        // Degrade gracefully: never a blank screen.
         taskEl.textContent = fallbackTask;
         newsEl.innerHTML = '<li class="empty">More good news on the way — check back soon.</li>';
       }
+
+      // Surface the "← today" affordance only when viewing an archive day.
+      if (archiveDate && todayLink) {
+        todayLink.hidden = false;
+      }
+
+      sendBtn.addEventListener('click', async function () {
+        var text = "A postcard of good — from gethappyinfo.com";
+        try {
+          if (navigator.share) {
+            await navigator.share({ title: 'Get Happy Info', text: text, url: shareUrl });
+          } else if (navigator.clipboard && navigator.clipboard.writeText) {
+            await navigator.clipboard.writeText(shareUrl);
+            var original = sendBtn.innerHTML;
+            sendBtn.textContent = '✓ link copied';
+            setTimeout(function () { sendBtn.innerHTML = original; }, 1800);
+          } else {
+            // No share or clipboard API (older / non-secure context): surface the
+            // URL so the visitor can copy it by hand rather than the button no-opping.
+            window.prompt('Copy this link to share:', shareUrl);
+          }
+        } catch (e) { /* user cancelled or unsupported */ }
+      });
     })();
   </script>
 </body>

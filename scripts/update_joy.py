@@ -39,6 +39,7 @@ ROOT = Path(__file__).resolve().parent.parent
 TASKS_FILE = ROOT / "data" / "tasks.txt"
 RECENT_FILE = ROOT / "data" / "recent.json"
 JOY_FILE = ROOT / "public" / "joy.json"
+ARCHIVE_FILE = ROOT / "public" / "joy-archive.json"
 
 # Fail-closed denylist. A positive-news source rarely trips these, but when a
 # title carries a grim or off-brand term we drop it rather than risk it. Word
@@ -175,6 +176,38 @@ def main() -> int:
     joy = {"lastUpdated": date.isoformat(), "dailyTask": task, "topNews": news}
     JOY_FILE.write_text(json.dumps(joy, indent=2) + "\n", encoding="utf-8")
     print(f"[update_joy] wrote {JOY_FILE.relative_to(ROOT)} — task seeded for {date.isoformat()}")
+
+    # Append today to the public archive (keyed by ISO date so client-side
+    # per-day routes — /YYYY-MM-DD — can resolve old postcards). Object keyed
+    # by date sorts chronologically when serialized with sort_keys=True.
+    # Fail closed: a fresh archive is fine, but if the file exists and won't
+    # parse (or has the wrong shape) we must NOT overwrite it — doing so would
+    # replace all prior days with today alone. Abort instead so a failed run
+    # surfaces it rather than silently truncating history.
+    if ARCHIVE_FILE.exists():
+        try:
+            archive = json.loads(ARCHIVE_FILE.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as exc:
+            print(
+                f"[update_joy] ERROR: {ARCHIVE_FILE.relative_to(ROOT)} is corrupt "
+                f"({exc}); refusing to overwrite and lose history",
+                file=sys.stderr,
+            )
+            return 1
+        if not isinstance(archive, dict) or not isinstance(archive.get("days"), dict):
+            print(
+                f"[update_joy] ERROR: {ARCHIVE_FILE.relative_to(ROOT)} has an "
+                "unexpected shape; refusing to overwrite and lose history",
+                file=sys.stderr,
+            )
+            return 1
+    else:
+        archive = {"days": {}}
+    archive["days"][date.isoformat()] = joy
+    ARCHIVE_FILE.write_text(
+        json.dumps(archive, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    print(f"[update_joy] archive: {len(archive['days'])} day(s) total")
     return 0
 
 
