@@ -9,6 +9,8 @@ __pycache__/
 .env*
 !.env.example
 
-# local-only brand sources (not served, not in build)
+# local-only brand sources (not served, not in build).
+# test/ holds brand PNG mockups (ignored) AND the updater test suite (tracked).
 assets/
-test/
+test/*
+!test/*.py

@@ -593,6 +593,42 @@
         }
       }
 
+      // Additive internal nav (V3 content library). Best-effort: fetches the tiny
+      // today-pages.json map and, when it matches today's postcard, adds an "our
+      // take" link to each headline's story page and links the task to its kindness
+      // page. Any failure is swallowed — the external links rendered above stand.
+      async function addLibraryLinks(joy) {
+        try {
+          var res = await fetch('/today-pages.json', { cache: 'no-cache' });
+          if (!res.ok) return;
+          var map = await res.json();
+          if (!map || map.date !== joy.lastUpdated) return;
+          var linkStyle = "display:inline-block;margin-left:2.1rem;margin-top:.2rem;"
+            + "font-family:'IBM Plex Mono',monospace;font-size:.64rem;letter-spacing:.08em;"
+            + "text-transform:uppercase;color:var(--postal-red);text-decoration:none";
+          var news = Array.isArray(joy.topNews) ? joy.topNews : [];
+          news.forEach(function (n, i) {
+            var internal = map.stories && map.stories[n.url];
+            var li = newsEl.children[i];
+            if (!internal || !li) return;
+            var a = document.createElement('a');
+            a.href = encodeURI(internal);
+            a.textContent = 'our take →';
+            a.setAttribute('style', linkStyle);
+            li.appendChild(a);
+          });
+          if (map.kindness) {
+            var t = taskEl.textContent;
+            var ka = document.createElement('a');
+            ka.href = encodeURI(map.kindness);
+            ka.textContent = t;
+            ka.style.color = 'inherit';
+            taskEl.textContent = '';
+            taskEl.appendChild(ka);
+          }
+        } catch (e) { /* leave external links as-is */ }
+      }
+
       try {
         if (archiveDate) {
           var data = null;
@@ -615,7 +651,9 @@
         } else {
           var res = await fetch('/joy.json', { cache: 'no-cache' });
           if (!res.ok) throw new Error('status ' + res.status);
-          render(await res.json());
+          var joy = await res.json();
+          render(joy);
+          addLibraryLinks(joy);
         }
       } catch (err) {
         taskEl.textContent = fallbackTask;

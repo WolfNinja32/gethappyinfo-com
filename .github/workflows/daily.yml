@@ -29,14 +29,24 @@ jobs:
           python-version: "3.12"
 
       - name: Refresh joy.json
+        env:
+          # Story-page summaries (Claude Haiku via stdlib urllib). Optional: with no
+          # key the run is skip-only — the daily postcard never depends on it.
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: python scripts/update_joy.py
 
       - name: Commit if changed
         run: |
           git config user.name "gethappyinfo-bot"
           git config user.email "bot@gethappyinfo.com"
-          if [[ -n "$(git status --porcelain public/joy.json public/joy-archive.json data/recent.json)" ]]; then
-            git add public/joy.json public/joy-archive.json data/recent.json
+          # Postcard payload + V3 content-library outputs (story/kindness pages,
+          # cumulative sitemap/index/llms, slug ledger, skip-audit log).
+          PATHS="public/joy.json public/joy-archive.json public/index.json \
+                 public/sitemap.xml public/llms.txt public/robots.txt \
+                 public/today-pages.json public/story public/kindness \
+                 data/recent.json data/kindness-slugs.json data/generation-log.json"
+          if [[ -n "$(git status --porcelain $PATHS)" ]]; then
+            git add $PATHS
             git commit -m "Daily joy update ($(date -u +%Y-%m-%d))"
             git push
           else
