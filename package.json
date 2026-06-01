@@ -1,0 +1,16 @@
+{
+  "name": "gethappyinfo-com",
+  "version": "1.0.0",
+  "description": "A daily postcard of good - Open Graph tags implementation",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "wrangler": "^3.0.0",
+    "typescript": "^5.0.0",
+    "@cloudflare/workers-types": "^4.20230419.0"
+  }
+}
