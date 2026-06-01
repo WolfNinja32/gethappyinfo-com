@@ -27,7 +27,6 @@ from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
 from zoneinfo import ZoneInfo
 
-FEED_URL = "https://www.goodnewsnetwork.org/feed/"
 USER_AGENT = "gethappyinfo-bot/1.0 (+https://gethappyinfo.com)"
 NUM_HEADLINES = 3
 RECENT_DAYS = 14
@@ -41,6 +40,21 @@ RECENT_FILE = ROOT / "data" / "recent.json"
 JOY_FILE = ROOT / "public" / "joy.json"
 ARCHIVE_FILE = ROOT / "public" / "joy-archive.json"
 
+# Source allowlist — topic-clean GNN category feeds (validated 2026-05-30).
+# Curating at the source is the primary topic control; the denylist below is a
+# backstop. Slot policy A: an animal story always leads (slot 1); the other two
+# slots fill from the non-animal feeds in proportion to weight. Weights seed from
+# the Reuters Digital News Report 2024 interest figures, adjusted per Gregory
+# (Kindness +20% -> 36, Science -20% -> 23). Tune freely.
+_GNN = "https://www.goodnewsnetwork.org/category/news"
+FEEDS = [
+    {"topic": "animals",   "url": f"{_GNN}/animals/feed/",   "weight": 0,  "is_animal": True},
+    {"topic": "inspiring", "url": f"{_GNN}/inspiring/feed/", "weight": 36, "is_animal": False},
+    {"topic": "health",    "url": f"{_GNN}/health/feed/",    "weight": 30, "is_animal": False},
+    {"topic": "earth",     "url": f"{_GNN}/earth/feed/",     "weight": 27, "is_animal": False},
+    {"topic": "science",   "url": f"{_GNN}/science/feed/",   "weight": 23, "is_animal": False},
+]
+
 # Fail-closed denylist. A positive-news source rarely trips these, but when a
 # title carries a grim or off-brand term we drop it rather than risk it. Word
 # boundaries keep "war" from matching "warm" / "dead" from "deadline".
@@ -53,6 +67,11 @@ DENY_TERMS = [
     "outbreak", "pandemic", "lawsuit", "arrested", "indicted", "scandal",
     # profanity (kept minimal; extend as needed)
     "damn", "hell",
+    # off-brand / mystical (backstop — the feed allowlist is the primary control)
+    "horoscope", "zodiac", "astrology", "astrologer", "astrological",
+    "tarot", "psychic", "clairvoyant", "occult", "séance", "seance",
+    "ouija", "star sign", "mercury retrograde", "crystal healing",
+    "manifestation ritual",
 ]
 DENY_RE = re.compile(r"\b(" + "|".join(map(re.escape, DENY_TERMS)) + r")\b", re.I)
 
@@ -90,8 +109,8 @@ def too_similar(title: str, chosen: list[dict]) -> bool:
     )
 
 
-def fetch_items() -> list[dict]:
-    req = urllib.request.Request(FEED_URL, headers={"User-Agent": USER_AGENT})
+def fetch_feed(url: str) -> list[dict]:
+    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
     with urllib.request.urlopen(req, timeout=FETCH_TIMEOUT) as resp:
         raw = resp.read()
     root = ET.fromstring(raw)
@@ -104,21 +123,99 @@ def fetch_items() -> list[dict]:
     return items
 
 
-def select(items: list[dict], recent_urls: set[str]) -> list[dict]:
-    picks: list[dict] = []
+def fetch_all(feeds: list[dict]) -> dict[str, list[dict]]:
+    """Fetch every feed independently. A feed that fails yields an empty list so
+    one dead source never sinks the run (degrade-safe)."""
+    by_topic: dict[str, list[dict]] = {}
+    for f in feeds:
+        try:
+            by_topic[f["topic"]] = fetch_feed(f["url"])
+        except Exception as exc:  # network / parse — skip this feed, keep going
+            print(f"[update_joy] feed '{f['topic']}' fetch failed: {exc}", file=sys.stderr)
+            by_topic[f["topic"]] = []
+    return by_topic
+
+
+def weighted_topic_cycle(feeds: list[dict]) -> list[str]:
+    """Smooth weighted round-robin over the non-animal topics: a cyclic sequence
+    in which each topic appears `weight` times, evenly interleaved (no clumps).
+    Indexing into it by date gives a deterministic rotation whose long-run share
+    per topic approximates its weight."""
+    pool = [(f["topic"], f["weight"]) for f in feeds
+            if not f["is_animal"] and f["weight"] > 0]
+    total = sum(w for _, w in pool)
+    if total == 0:
+        return [t for t, _ in pool]
+    current = {t: 0 for t, _ in pool}
+    seq: list[str] = []
+    for _ in range(total):
+        for t, w in pool:
+            current[t] += w
+        best = max(pool, key=lambda tw: current[tw[0]])[0]
+        current[best] -= total
+        seq.append(best)
+    return seq
+
+
+def select(by_topic: dict[str, list[dict]], recent_urls: set[str],
+           date, feeds: list[dict]) -> list[dict]:
+    """Slot policy A: slot 1 is an animal story; slots 2-3 come from the
+    non-animal feeds, prioritised by a date-rotated weighted topic order, two
+    distinct topics where possible. Degrades gracefully when a feed is dry."""
+    chosen: list[dict] = []
     seen: set[str] = set()
-    for it in items:
-        if it["url"] in recent_urls or it["url"] in seen:
-            continue
-        if is_denylisted(it["text"]):
-            continue
-        if too_similar(it["text"], picks):
-            continue
-        picks.append(it)
-        seen.add(it["url"])
-        if len(picks) >= NUM_HEADLINES:
-            break
-    return picks
+
+    def take_from(topic: str) -> bool:
+        for it in by_topic.get(topic, []):
+            if it["url"] in recent_urls or it["url"] in seen:
+                continue
+            if is_denylisted(it["text"]):
+                continue
+            if too_similar(it["text"], chosen):
+                continue
+            chosen.append(it)
+            seen.add(it["url"])
+            return True
+        return False
+
+    # Slot 1 — guaranteed animal lead.
+    animal_topics = [f["topic"] for f in feeds if f["is_animal"]]
+    if not any(take_from(t) for t in animal_topics):
+        print("[update_joy] no animal story available — slot 1 falls back to a "
+              "weighted topic", file=sys.stderr)
+
+    # Slots 2-3 — date-rotated weighted order, distinct topics first.
+    cycle = weighted_topic_cycle(feeds)
+    if cycle:
+        start = (date.toordinal() * (NUM_HEADLINES - 1)) % len(cycle)
+        rotated = [cycle[(start + i) % len(cycle)] for i in range(len(cycle))]
+        topic_order: list[str] = []
+        for t in rotated:
+            if t not in topic_order:
+                topic_order.append(t)
+        # First pass: one story per distinct topic, in weighted-rotation order.
+        for t in topic_order:
+            if len(chosen) >= NUM_HEADLINES:
+                break
+            take_from(t)
+        # Second pass: if still short (some topics dry), allow extra picks.
+        for t in topic_order:
+            if len(chosen) >= NUM_HEADLINES:
+                break
+            take_from(t)
+
+    # Last resort: keep pulling from any feed (incl. animals) until full or dry,
+    # so a single feed with surplus items can still fill every slot.
+    progress = True
+    while len(chosen) < NUM_HEADLINES and progress:
+        progress = False
+        for f in feeds:
+            if len(chosen) >= NUM_HEADLINES:
+                break
+            if take_from(f["topic"]):
+                progress = True
+
+    return chosen[:NUM_HEADLINES]
 
 
 def pick_task(date) -> str:
@@ -150,28 +247,44 @@ def main() -> int:
     task = pick_task(date)
     existing = load_json(JOY_FILE, default=None)
 
-    try:
-        items = fetch_items()
-    except Exception as exc:  # network / parse — degrade, don't crash
-        print(f"[update_joy] feed fetch failed: {exc}", file=sys.stderr)
-        items = []
+    by_topic = fetch_all(FEEDS)
 
     recent = prune_recent(load_json(RECENT_FILE, default=[]), date)
     recent_urls = {e["url"] for e in recent}
-    picks = select(items, recent_urls)
+    picks = select(by_topic, recent_urls, date, FEEDS)
 
+    # Record fresh picks (already denylist-filtered by select()) in recent.json.
     if picks:
-        news = picks
         for p in picks:
             recent.append({"url": p["url"], "date": date.isoformat()})
         RECENT_FILE.write_text(json.dumps(recent, indent=2) + "\n", encoding="utf-8")
         print(f"[update_joy] {len(picks)} fresh headline(s); recent.json now {len(recent)} urls")
-    elif existing and existing.get("topNews"):
-        news = existing["topNews"]
-        print("[update_joy] no fresh headlines — carrying over last good set")
-    else:
-        news = []
-        print("[update_joy] no headlines available and no prior set — writing task only", file=sys.stderr)
+
+    # Assemble the published set — fail-closed AND degrade-safe: fresh picks
+    # first, then top up from the last good set so a thin fetch never shrinks or
+    # blanks the site. Carryover items are denylist-filtered (so a story that was
+    # fine under an older/looser denylist can't linger once the denylist grows)
+    # and deduped by URL. The result is the most CLEAN items available, up to 3.
+    news = list(picks)
+    if len(news) < NUM_HEADLINES and existing and isinstance(existing.get("topNews"), list):
+        # Dedup on canon()'d URLs both sides — fresh URLs are already canonical,
+        # but carryover may predate canon() or differ by slash/query, so compare
+        # like-for-like to avoid the same story appearing twice.
+        have = {canon(n.get("url", "")) for n in news}
+        carried = 0
+        for n in existing["topNews"]:
+            if len(news) >= NUM_HEADLINES:
+                break
+            cu = canon(n.get("url", ""))
+            if cu in have or is_denylisted(n.get("text", "")):
+                continue
+            news.append(n)
+            have.add(cu)
+            carried += 1
+        if carried:
+            print(f"[update_joy] topped up with {carried} filtered item(s) from last set")
+    if not news:
+        print("[update_joy] no clean headlines available — writing task only", file=sys.stderr)
 
     joy = {"lastUpdated": date.isoformat(), "dailyTask": task, "topNews": news}
     JOY_FILE.write_text(json.dumps(joy, indent=2) + "\n", encoding="utf-8")
