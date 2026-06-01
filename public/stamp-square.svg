@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 112 112" width="1024" height="1024">
+  <rect width="112" height="112" fill="#efe6d2"/>
+  <rect x="6" y="6" width="100" height="100" fill="#f5ecd6" stroke="#a13a2b" stroke-width="0.6"/>
+  <g fill="#efe6d2">
+    <circle cx="11" cy="6" r="3.3"/><circle cx="22" cy="6" r="3.3"/><circle cx="33" cy="6" r="3.3"/><circle cx="44" cy="6" r="3.3"/><circle cx="55" cy="6" r="3.3"/><circle cx="66" cy="6" r="3.3"/><circle cx="77" cy="6" r="3.3"/><circle cx="88" cy="6" r="3.3"/><circle cx="99" cy="6" r="3.3"/>
+    <circle cx="11" cy="106" r="3.3"/><circle cx="22" cy="106" r="3.3"/><circle cx="33" cy="106" r="3.3"/><circle cx="44" cy="106" r="3.3"/><circle cx="55" cy="106" r="3.3"/><circle cx="66" cy="106" r="3.3"/><circle cx="77" cy="106" r="3.3"/><circle cx="88" cy="106" r="3.3"/><circle cx="99" cy="106" r="3.3"/>
+    <circle cx="6" cy="14" r="3.3"/><circle cx="6" cy="26" r="3.3"/><circle cx="6" cy="38" r="3.3"/><circle cx="6" cy="50" r="3.3"/><circle cx="6" cy="62" r="3.3"/><circle cx="6" cy="74" r="3.3"/><circle cx="6" cy="86" r="3.3"/><circle cx="6" cy="98" r="3.3"/>
+    <circle cx="106" cy="14" r="3.3"/><circle cx="106" cy="26" r="3.3"/><circle cx="106" cy="38" r="3.3"/><circle cx="106" cy="50" r="3.3"/><circle cx="106" cy="62" r="3.3"/><circle cx="106" cy="74" r="3.3"/><circle cx="106" cy="86" r="3.3"/><circle cx="106" cy="98" r="3.3"/>
+  </g>
+  <g transform="translate(56, 48)">
+    <circle r="20" fill="#a13a2b"/>
+    <g stroke="#a13a2b" stroke-width="2.5" stroke-linecap="round">
+      <line x1="0" y1="-28" x2="0" y2="-34"/>
+      <line x1="0" y1="28" x2="0" y2="34"/>
+      <line x1="-28" y1="0" x2="-34" y2="0"/>
+      <line x1="28" y1="0" x2="34" y2="0"/>
+      <line x1="-20" y1="-20" x2="-24" y2="-24"/>
+      <line x1="20" y1="-20" x2="24" y2="-24"/>
+      <line x1="-20" y1="20" x2="-24" y2="24"/>
+      <line x1="20" y1="20" x2="24" y2="24"/>
+    </g>
+    <g fill="none" stroke="#efe6d2" stroke-width="2" stroke-linecap="round">
+      <path d="M -8 -4 Q -6 -9 -4 -4"/>
+      <path d="M 4 -4 Q 6 -9 8 -4"/>
+    </g>
+    <path d="M -8 3 Q 0 12 8 3 Z" fill="#efe6d2"/>
+  </g>
+  <text x="56" y="90" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="9" font-weight="700" fill="#36556b" letter-spacing="0.8">GET HAPPY</text>
+  <text x="56" y="100" text-anchor="middle" font-family="'Courier New', monospace" font-size="6" font-weight="700" fill="#36556b" letter-spacing="2">INFO.COM</text>
+</svg>
