@@ -33,7 +33,7 @@ gethappyinfo-com/
 │   └── recent.json                    14-day rolling URL ledger for cross-day dedup.
 ├── .github/
 │   └── workflows/
-│       └── daily.yml                  Cron 13:00 UTC. checkout@v6, setup-python@v6, run + commit + push.
+│       └── daily.yml                  Cron 12:00 UTC. checkout@v6, setup-python@v6, run + commit + push.
 ├── assets/                            Local-only brand source; not served, not in build.
 │   ├── bunch-of-flowers.png           Brand source image.
 │   └── get-happy-info-avatar.png      1024px avatar PNG.
@@ -46,11 +46,11 @@ gethappyinfo-com/
 
 ## Daily update workflow
 
-GitHub Actions cron fires at `0 13 * * *` UTC (≈06:00 PT). The updater is degrade-safe: on RSS fetch failure or zero-fresh-picks, it carries over the previous day's `topNews` while still rotating the daily task. Task selection is Pacific-day stable via `date.toordinal() % len(tasks)`.
+GitHub Actions cron fires at `0 12 * * *` UTC (≈05:00 PDT). GitHub may delay or drop scheduled runs under load — observed runs land 1.5–5 h late — so a manual `workflow_dispatch` is the reliable stopgap. The updater is degrade-safe: on RSS fetch failure or zero-fresh-picks, it carries over the previous day's `topNews` while still rotating the daily task. Task selection is Pacific-day stable via `date.toordinal() % len(tasks)`.
 
 ```mermaid
 flowchart TD
-    A[GH Actions cron 13:00 UTC] --> B[checkout @v6 + setup-python @v6]
+    A[GH Actions cron 12:00 UTC] --> B[checkout @v6 + setup-python @v6]
     B --> C[run scripts/update_joy.py]
     C --> D[fetch GNN RSS feed]
     D --> E[safety denylist filter]
