@@ -2,11 +2,13 @@ name: Daily joy update
 
 on:
   schedule:
-    # 12:00 UTC = 05:00 PDT (Mar–Nov) / 04:00 PST (Nov–Mar). GitHub Actions cron
-    # is UTC-only, so 5 AM Pacific can only be exact for one DST half — picked
-    # the PDT half since it's ~8 months/year. GitHub may delay scheduled runs
-    # 10–30 min under load; exact minute doesn't matter for a daily site.
-    - cron: "0 12 * * *"
+    # BACKUP trigger only. The primary, punctual trigger is a Cloudflare Worker
+    # cron (gethappy-services/daily-trigger) that fires at 12:00 UTC and dispatches
+    # this workflow. GitHub's own scheduler is unreliable — it delays runs hours or
+    # drops them entirely — so it runs LATER (14:00 UTC) purely as a safety net. If
+    # the Worker already updated today's postcard, update_joy.py's idempotency guard
+    # makes this backup run a clean no-op.
+    - cron: "0 14 * * *"
   workflow_dispatch: {}
 
 permissions:

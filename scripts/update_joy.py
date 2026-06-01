@@ -242,10 +242,25 @@ def prune_recent(recent: list[dict], date) -> list[dict]:
     return out
 
 
-def main() -> int:
+def main(force: bool = False) -> int:
     date = today_pt()
     task = pick_task(date)
     existing = load_json(JOY_FILE, default=None)
+
+    # Idempotency guard. This updater is fired by a reliable Cloudflare cron AND a
+    # later GitHub-cron backup (see .github/workflows/daily.yml). When today's
+    # postcard is already complete, the second trigger must be a no-op — otherwise
+    # it could re-pick newer stories and reshuffle a set the first run published.
+    # Bail before the network fetch. `--force` overrides for deliberate same-day
+    # regeneration.
+    if (not force and existing
+            and existing.get("lastUpdated") == date.isoformat()
+            and isinstance(existing.get("topNews"), list)
+            and len(existing["topNews"]) >= NUM_HEADLINES):
+        print(f"[update_joy] {date.isoformat()} already current "
+              f"({len(existing['topNews'])} stories) — nothing to do "
+              "(use --force to override)")
+        return 0
 
     by_topic = fetch_all(FEEDS)
 
@@ -325,4 +340,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(main(force="--force" in sys.argv[1:]))
