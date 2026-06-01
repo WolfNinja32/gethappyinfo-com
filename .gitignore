@@ -8,3 +8,7 @@ __pycache__/
 !.dev.vars.example
 .env*
 !.env.example
+
+# local-only brand sources (not served, not in build)
+assets/
+test/
