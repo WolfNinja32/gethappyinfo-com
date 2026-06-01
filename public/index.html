@@ -536,12 +536,6 @@
           .replace(/'/g, '&#39;');
       }
 
-      function updateOGTags(title, description, url) {
-        document.querySelector('meta[property="og:title"]').content = title;
-        document.querySelector('meta[property="og:description"]').content = description;
-        document.querySelector('meta[property="og:url"]').content = url;
-      }
-
       // Only http(s) links are allowed through to href — blocks javascript:,
       // data:, and other script-bearing schemes if a feed item is ever tainted.
       function safeUrl(u) {
@@ -578,11 +572,7 @@
             ? 'gethappyinfo.com · no. ' + days
             : 'gethappyinfo.com · ' + parts.iso;
           shareUrl = window.location.origin + '/' + parts.iso;
-          var pageTitle = 'Get Happy Info — ' + parts.monthShort + ' ' + parts.day + ', ' + parts.year;
-          document.title = pageTitle;
-          if (archiveDate) {
-            updateOGTags(pageTitle, data.dailyTask || fallbackTask, shareUrl);
-          }
+          document.title = 'Get Happy Info — ' + parts.monthShort + ' ' + parts.day + ', ' + parts.year;
         }
       }
 
@@ -594,10 +584,7 @@
           postmarkDate.textContent = parts.monthShort + ' ' + parts.day;
           postmarkYear.textContent = parts.year;
           editionEl.textContent = 'gethappyinfo.com · ' + reqDate;
-          var pageTitle = 'Get Happy Info — ' + parts.monthShort + ' ' + parts.day + ', ' + parts.year;
-          document.title = pageTitle;
-          shareUrl = window.location.origin + '/' + reqDate;
-          updateOGTags(pageTitle, 'No postcard from that day — yet.', shareUrl);
+          document.title = 'Get Happy Info — ' + parts.monthShort + ' ' + parts.day + ', ' + parts.year;
         }
       }
 
