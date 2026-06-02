@@ -39,16 +39,18 @@ jobs:
         run: |
           git config user.name "gethappyinfo-bot"
           git config user.email "bot@gethappyinfo.com"
-          # Postcard payload + V3 content-library outputs (story/kindness pages,
-          # cumulative sitemap/index/llms, slug ledger, skip-audit log).
-          PATHS="public/joy.json public/joy-archive.json public/index.json \
-                 public/sitemap.xml public/llms.txt public/robots.txt \
-                 public/today-pages.json data/recent.json data/kindness-slugs.json data/generation-log.json"
-          if [[ -n "$(git status --porcelain $PATHS)" ]]; then
-            git add $PATHS
-            # Optional directories (only exist if content was generated)
-            [[ -d public/story ]] && git add public/story || true
-            [[ -d public/kindness ]] && git add public/kindness || true
+          # Always-present files (postcard + recent history)
+          CORE_PATHS="public/joy.json public/joy-archive.json data/recent.json"
+          # V3 content-library outputs (optional; only exist if generation runs)
+          OPTIONAL_PATHS="public/index.json public/sitemap.xml public/llms.txt public/robots.txt \
+                          public/today-pages.json data/kindness-slugs.json data/generation-log.json \
+                          public/story public/kindness"
+          if [[ -n "$(git status --porcelain $CORE_PATHS)" ]]; then
+            git add $CORE_PATHS
+            # Add optional files only if they exist
+            for path in $OPTIONAL_PATHS; do
+              [[ -e "$path" ]] && git add "$path" || true
+            done
             git commit -m "Daily joy update ($(date -u +%Y-%m-%d))"
             git push
           else
