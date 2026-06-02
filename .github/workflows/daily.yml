@@ -43,10 +43,12 @@ jobs:
           # cumulative sitemap/index/llms, slug ledger, skip-audit log).
           PATHS="public/joy.json public/joy-archive.json public/index.json \
                  public/sitemap.xml public/llms.txt public/robots.txt \
-                 public/today-pages.json public/story public/kindness \
-                 data/recent.json data/kindness-slugs.json data/generation-log.json"
+                 public/today-pages.json data/recent.json data/kindness-slugs.json data/generation-log.json"
           if [[ -n "$(git status --porcelain $PATHS)" ]]; then
             git add $PATHS
+            # Optional directories (only exist if content was generated)
+            [[ -d public/story ]] && git add public/story || true
+            [[ -d public/kindness ]] && git add public/kindness || true
             git commit -m "Daily joy update ($(date -u +%Y-%m-%d))"
             git push
           else
