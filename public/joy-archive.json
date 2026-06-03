@@ -80,6 +80,33 @@
           "url": "https://www.goodnewsnetwork.org/drug-used-to-treat-asthma-and-allergies-may-also-fight-aggressive-cancers"
         }
       ]
+    },
+    "2026-06-03": {
+      "dailyTask": "Leave an encouraging comment on a creator's work.",
+      "lastUpdated": "2026-06-03",
+      "topNews": [
+        {
+          "creator": "Andy Corbley",
+          "date": "2026-06-02",
+          "excerpt": "This year\u2019s calving season along the southeast coastline of America has documented the most North Atlantic right whale calves since 2009. Additionally, trends in calf births seem to indicate a normalization of breeding and birthing among the animals that could accelerate population recovery. GNN has lately devoted many column inches to the North Atlantic right",
+          "text": "2026 Sees the Most Right Whale Calves Born in One Season Since 2009",
+          "url": "https://www.goodnewsnetwork.org/2026-sees-the-most-right-whale-calves-born-in-one-season-since-2009"
+        },
+        {
+          "creator": "Andy Corbley",
+          "date": "2026-05-21",
+          "excerpt": "With every pass of his squeegee, a window washer in Kansas City reveals the personal story behind his favorite local businesses through his popular social media channel. Davis Roethler is co-owner of Window Wolf, KC\u2019s most trusted window washer, but that\u2019s hardly all there is to his story. With experience as a social media content",
+          "text": "With Each Free Clean, Window Washer Influencer Spotlights Great, Struggling Restaurants in Kansas City",
+          "url": "https://www.goodnewsnetwork.org/with-every-free-clean-window-washer-influencer-spotlights-great-struggling-restaurants-in-kansas-city"
+        },
+        {
+          "creator": "Good News Network",
+          "date": "2026-05-30",
+          "excerpt": "A new study shows that a low-cost sodium-ion battery currently used in cars and large-scale energy storage systems in China matches most performance parameters and production quality found in Tesla\u2019s lithium-ion batteries. Since sodium is much more abundant and widely available than lithium, using it for batteries could cut raw material costs for manufacturers and",
+          "text": "Batteries That Use Sodium Instead of Lithium Could Be Low-Cost Rival to Tesla\u2019s",
+          "url": "https://www.goodnewsnetwork.org/batteries-that-use-sodium-instead-of-lithium-could-be-low-cost-rival-to-teslas"
+        }
+      ]
     }
   }
 }
