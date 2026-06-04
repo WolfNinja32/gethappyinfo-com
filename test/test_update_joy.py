@@ -280,7 +280,10 @@ class TestDegradeSafe(TmpEnv):
 
     def test_summarizer_failure_never_blanks_postcard(self):
         import os
-        os.environ["ANTHROPIC_API_KEY"] = "dummy-key"   # take the generation branch
+        orig_tok = os.environ.get("CLOUDFLARE_API_TOKEN")
+        orig_acct = uj.WORKERS_AI_ACCOUNT
+        os.environ["CLOUDFLARE_API_TOKEN"] = "dummy-token"  # take the generation branch
+        uj.WORKERS_AI_ACCOUNT = "dummy-acct"
         orig_fetch, orig_sum = uj.fetch_all, uj.summarize_story
         uj.fetch_all = lambda feeds: self._fake_feeds()
         def boom(item):
@@ -290,7 +293,11 @@ class TestDegradeSafe(TmpEnv):
             rc = uj.main(force=True)
         finally:
             uj.fetch_all, uj.summarize_story = orig_fetch, orig_sum
-            os.environ.pop("ANTHROPIC_API_KEY", None)
+            uj.WORKERS_AI_ACCOUNT = orig_acct
+            if orig_tok is None:
+                os.environ.pop("CLOUDFLARE_API_TOKEN", None)
+            else:
+                os.environ["CLOUDFLARE_API_TOKEN"] = orig_tok
         self.assertEqual(rc, 0)                                  # run still succeeds
         joy = json.loads(uj.JOY_FILE.read_text())                # postcard written
         self.assertEqual(len(joy["topNews"]), uj.NUM_HEADLINES)  # full, not blank
@@ -299,16 +306,47 @@ class TestDegradeSafe(TmpEnv):
         log = json.loads(uj.GEN_LOG_FILE.read_text())            # failures logged
         self.assertTrue(any(e["reason"].startswith("error:") for e in log))
 
+    def test_failed_review_skips_page_and_logs(self):
+        import os
+        orig_tok = os.environ.get("CLOUDFLARE_API_TOKEN")
+        orig_acct = uj.WORKERS_AI_ACCOUNT
+        os.environ["CLOUDFLARE_API_TOKEN"] = "dummy-token"  # take the generation branch
+        uj.WORKERS_AI_ACCOUNT = "dummy-acct"
+        orig_fetch, orig_sum, orig_rev = uj.fetch_all, uj.summarize_story, uj.review_summary
+        uj.fetch_all = lambda feeds: self._fake_feeds()
+        uj.summarize_story = lambda item: {           # writer succeeds...
+            "headline": "A small good thing happened today",
+            "summary": "A clean, grounded summary of the item.",
+            "why": "It is a real, specific bit of good news.",
+        }
+        uj.review_summary = lambda item, summary: {   # ...but the reviewer rejects it
+            "ok": False, "reason": "added an unsupported fact"}
+        try:
+            rc = uj.main(force=True)
+        finally:
+            uj.fetch_all, uj.summarize_story, uj.review_summary = orig_fetch, orig_sum, orig_rev
+            uj.WORKERS_AI_ACCOUNT = orig_acct
+            if orig_tok is None:
+                os.environ.pop("CLOUDFLARE_API_TOKEN", None)
+            else:
+                os.environ["CLOUDFLARE_API_TOKEN"] = orig_tok
+        self.assertEqual(rc, 0)                                   # run still succeeds
+        self.assertFalse(any(uj.STORY_DIR.glob("*/index.html")))  # rejected => no page
+        log = json.loads(uj.GEN_LOG_FILE.read_text())
+        self.assertTrue(any(e["reason"].startswith("review:") for e in log))  # logged as review skip
+
     def test_no_api_key_is_skip_only_not_failure(self):
         import os
-        os.environ.pop("ANTHROPIC_API_KEY", None)
         os.environ.pop("GHI_LLM", None)
+        orig_acct = uj.WORKERS_AI_ACCOUNT
+        uj.WORKERS_AI_ACCOUNT = ""                      # no creds -> skip-only
         orig_fetch = uj.fetch_all
         uj.fetch_all = lambda feeds: self._fake_feeds()
         try:
             rc = uj.main(force=True)
         finally:
             uj.fetch_all = orig_fetch
+            uj.WORKERS_AI_ACCOUNT = orig_acct
         self.assertEqual(rc, 0)
         self.assertTrue(uj.JOY_FILE.exists())
         self.assertFalse(any(uj.STORY_DIR.glob("*/index.html")))

@@ -120,9 +120,11 @@ agent-discovery plumbing. Plan + dual-reviewer (Codex + Gemini) audit trail:
 - `fetch_feed()` now also captures each item's `<description>` excerpt, `<creator>`
   byline, and `<pubDate>`. The excerpt (GNN's syndicated intro, boilerplate stripped)
   is the **only** grounding for the summary — we never store or publish the body.
-- `summarize_story()` calls **Claude Haiku 4.5** via stdlib `urllib` POST to the
-  Anthropic Messages API (key in `ANTHROPIC_API_KEY` secret; no SDK). The voice +
-  exact prompts live in `scripts/voice.md` (edit voice there; the pipeline follows).
+- `summarize_story()` calls **Cloudflare Workers AI — Kimi K2.6 with reasoning off**
+  (`chat_template_kwargs.thinking:false`) via stdlib `urllib` POST to the Workers AI
+  REST API (free tier; token in `CLOUDFLARE_API_TOKEN` secret + `CLOUDFLARE_ACCOUNT_ID`;
+  no SDK). The voice + exact prompts live in `scripts/voice.md` (edit voice there; the
+  pipeline follows). Model chosen by a 6-model bake-off; see [[v3-content-library]].
 - **One canonical gate-failure rule:** any failure — API error, hallucinated number
   (groundedness), too-thin (<60 words original copy), near-duplicate (ratio >0.60),
   headline too close to source (ratio ≥0.70) — **skips that page and logs to
@@ -160,7 +162,7 @@ single-file-site, no-external-service — all crossed; stdlib-only (no pip) pres
 - **Sender + reply-to.** Sender name `Get Happy Info`. Reply-to `hello@gethappyinfo.com` (iCloud+).
 - **Address privacy.** Use beehiiv's virtual mailbox in every footer. Never the user's home address, never a friend's address.
 - **Substack avoidance.** Default newsletter platform is beehiiv. Both Substack accounts were suspended 2026-05-28; do not recommend Substack unless explicitly revisited.
-- **Stack invariants.** GitHub-direct repo (`WolfNinja32/gethappyinfo-com`), no Gitea mirror. Stdlib-only Python updater (no pip packages, no Node) — *preserved in V3*: the Anthropic call uses `urllib`, not an SDK. V3 crosses "no LLM" (Haiku summaries), "no build step" (HTML rendering), "single-file site" (multi-page), and "no external service dependency" (Anthropic API — but degrade-safe: the daily postcard never hard-depends on it). GH Actions pinned to `checkout@v6` + `setup-python@v6`.
+- **Stack invariants.** GitHub-direct repo (`WolfNinja32/gethappyinfo-com`), no Gitea mirror. Stdlib-only Python updater (no pip packages, no Node) — *preserved in V3*: the Workers AI call uses `urllib`, not an SDK. **Free resources only** — Workers AI runs on the Cloudflare free tier (no paid API; the earlier Anthropic/Haiku build was removed for violating this). V3 crosses "no LLM" (Kimi writes summaries), "no build step" (HTML rendering), "single-file site" (multi-page), and "no external service dependency" (Workers AI — but degrade-safe: the daily postcard never hard-depends on it). GH Actions pinned to `checkout@v6` + `setup-python@v6`.
 
 ## Anti-patterns
 
@@ -174,7 +176,7 @@ single-file-site, no-external-service — all crossed; stdlib-only (no pip) pres
 - Do not use white or cold-gray (`#DFDFDF`, etc.) in the palette. Postcard palette has no cold neutrals.
 - Do not click "Generate with AI" or pick beehiiv preset palettes/font pairs — both regress to SaaS-generic.
 - Do not revert beehiiv copy to platform defaults ("Subscribe to our free newsletter", etc.).
-- Do not add LLM *curation/ranking*, analytics, or email capture to the site. (V3 — 2026-06-01 — deliberately crossed "no LLM" and "no navigation": Claude Haiku writes per-page *summaries* (not ranking), and the postcard now links to story/kindness library pages. See "V3 — content library" below. Multi-source aggregation arrived in V2.)
+- Do not add LLM *curation/ranking*, analytics, or email capture to the site. (V3 — 2026-06-01 — deliberately crossed "no LLM" and "no navigation": Kimi K2.6 (free Workers AI) writes per-page *summaries* (not ranking), and the postcard now links to story/kindness library pages. See "V3 — content library" below. Multi-source aggregation arrived in V2.)
 - Do not automate the weekly digest before issue 2 sends.
 - Do not roll GH Actions back to `checkout@v4` / `setup-python@v5` (Node 20 deprecation 2026-06-02).
 - Do not mirror this repo to Gitea — daily bot commits would be clobbered by force-mirror.

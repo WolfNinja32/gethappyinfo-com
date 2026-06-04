@@ -56,13 +56,21 @@ TODAY_PAGES_FILE = ROOT / "public" / "today-pages.json"
 KINDNESS_SLUGS_FILE = ROOT / "data" / "kindness-slugs.json"
 GEN_LOG_FILE = ROOT / "data" / "generation-log.json"
 
-# Anthropic Messages API, called via stdlib urllib (no SDK dependency). The key
-# lives only in the env (ANTHROPIC_API_KEY, a GitHub secret in CI). With no key,
-# story-page generation is skipped entirely — the daily postcard never depends on it.
-ANTHROPIC_URL = "https://api.anthropic.com/v1/messages"
-ANTHROPIC_MODEL = "claude-haiku-4-5-20251001"
-ANTHROPIC_VERSION = "2023-06-01"
-ANTHROPIC_MAX_TOKENS = 512
+# Cloudflare Workers AI, called via stdlib urllib (no SDK, no paid API — free tier).
+# Writer is Kimi K2.6 with reasoning DISABLED (thinking:false): a model bake-off showed
+# reasoning-on is slow, costly, and frequently returns no output, while reasoning-off is
+# fast, reliable, and on-voice. Creds live only in env — CLOUDFLARE_API_TOKEN (a GitHub
+# secret, needs Workers AI:Read) + CLOUDFLARE_ACCOUNT_ID — both set in CI. With no token,
+# story-page generation is skipped entirely; the daily postcard never depends on it.
+WORKERS_AI_ACCOUNT = os.environ.get("CLOUDFLARE_ACCOUNT_ID", "")
+WORKERS_AI_URL = "https://api.cloudflare.com/client/v4/accounts/{account}/ai/run/{model}"
+WRITER_MODEL = "@cf/moonshotai/kimi-k2.6"
+WRITER_PARAMS = {"chat_template_kwargs": {"thinking": False}}  # K2.6 reasoning off
+# Independent grounding reviewer — a DIFFERENT, non-reasoning model (so it can't hit the
+# token-blowup that disqualified reasoning models), chosen via bake-off: fast, clean JSON.
+REVIEW_MODEL = "@cf/mistralai/mistral-small-3.1-24b-instruct"
+WORKERS_AI_MAX_TOKENS = 1024
+WORKERS_AI_TIMEOUT = 90  # Kimi-off is usually ~5s but can run ~25s; latency is fine here
 
 # Content gates (plan §Decisions #5/#8b). A failure of any gate => skip that page
 # and log; never blank the postcard, never hard-fail the run on live content.
@@ -392,29 +400,37 @@ def load_prompt(marker: str) -> str:
     return m.group(1).strip()
 
 
-def call_anthropic(prompt: str) -> str:
-    """POST a single user message to the Anthropic Messages API via urllib and
-    return the text reply. Raises on missing key or any transport/format error;
-    callers treat that as a skip (degrade-safe)."""
-    key = os.environ.get("ANTHROPIC_API_KEY")
-    if not key:
-        raise RuntimeError("ANTHROPIC_API_KEY not set")
+def call_workers_ai(prompt: str, model: str = WRITER_MODEL,
+                    params: dict | None = None) -> str:
+    """POST a single user message to Cloudflare Workers AI via urllib and return the
+    text reply. Raises on missing creds or any transport/format error; callers treat
+    that as a skip (degrade-safe). Free tier — no paid API."""
+    token = os.environ.get("CLOUDFLARE_API_TOKEN")
+    if not token or not WORKERS_AI_ACCOUNT:
+        raise RuntimeError("CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID not set")
     body = json.dumps({
-        "model": ANTHROPIC_MODEL,
-        "max_tokens": ANTHROPIC_MAX_TOKENS,
         "messages": [{"role": "user", "content": prompt}],
+        "max_tokens": WORKERS_AI_MAX_TOKENS,
+        **(params or {}),
     }).encode("utf-8")
-    req = urllib.request.Request(ANTHROPIC_URL, data=body, method="POST", headers={
-        "x-api-key": key,
-        "anthropic-version": ANTHROPIC_VERSION,
-        "content-type": "application/json",
+    url = WORKERS_AI_URL.format(account=WORKERS_AI_ACCOUNT, model=model)
+    req = urllib.request.Request(url, data=body, method="POST", headers={
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
         "User-Agent": USER_AGENT,
     })
-    with urllib.request.urlopen(req, timeout=FETCH_TIMEOUT) as resp:
+    with urllib.request.urlopen(req, timeout=WORKERS_AI_TIMEOUT) as resp:
         payload = json.loads(resp.read())
-    parts = payload.get("content") or []
-    text = "".join(p.get("text", "") for p in parts if p.get("type") == "text")
-    if not text.strip():
+    if not payload.get("success", False):
+        raise ValueError(f"workers-ai error: {payload.get('errors')}")
+    result = payload.get("result") or {}
+    # Two response shapes: simple {response} or OpenAI-style {choices:[{message:{content}}]}.
+    text = result.get("response")
+    if not text:
+        choices = result.get("choices") or []
+        if choices:
+            text = (choices[0].get("message") or {}).get("content") or ""
+    if not text or not text.strip():
         raise ValueError("empty completion")
     return text
 
@@ -474,9 +490,10 @@ def summarize_story(item: dict) -> dict | None:
             "summary": excerpt or title,
             "why": "A small, real reminder that good things keep happening.",
         }
-    raw = call_anthropic(load_prompt("STORY PROMPT")
-                         .replace("{{TITLE}}", title)
-                         .replace("{{EXCERPT}}", excerpt))
+    raw = call_workers_ai(load_prompt("STORY PROMPT")
+                          .replace("{{TITLE}}", title)
+                          .replace("{{EXCERPT}}", excerpt),
+                          model=WRITER_MODEL, params=WRITER_PARAMS)
     obj = parse_json_reply(raw)
     if not all(k in obj for k in ("headline", "summary", "why")):
         raise ValueError("story reply missing keys")
@@ -491,11 +508,32 @@ def expand_kindness(task: str) -> dict | None:
                     "skip. Naming one makes it likelier you actually do it today."),
             "ways": [task, "Do it for a stranger.", "Do it without being asked."],
         }
-    raw = call_anthropic(load_prompt("KINDNESS PROMPT").replace("{{TASK}}", task))
+    raw = call_workers_ai(load_prompt("KINDNESS PROMPT").replace("{{TASK}}", task),
+                          model=WRITER_MODEL, params=WRITER_PARAMS)
     obj = parse_json_reply(raw)
     if not all(k in obj for k in ("title", "why", "ways")):
         raise ValueError("kindness reply missing keys")
     return obj
+
+
+def review_summary(item: dict, summary: dict) -> dict:
+    """Independent grounding check by a DIFFERENT model (REVIEW_MODEL) than the writer:
+    does the draft assert anything the source doesn't support? Catches the gap the
+    deterministic number-gate can't — added facts / outside knowledge / invented
+    mechanisms. Returns {"ok": bool, "reason": str}; fail-closed (unparseable or
+    missing 'ok' => not ok => the caller skips+logs). GHI_LLM=off auto-passes."""
+    if os.environ.get("GHI_LLM") == "off":
+        return {"ok": True, "reason": "llm-off"}
+    raw = call_workers_ai(
+        load_prompt("REVIEW PROMPT")
+        .replace("{{TITLE}}", item.get("text", ""))
+        .replace("{{EXCERPT}}", item.get("excerpt", ""))
+        .replace("{{HEADLINE}}", summary.get("headline", ""))
+        .replace("{{SUMMARY}}", summary.get("summary", ""))
+        .replace("{{WHY}}", summary.get("why", "")),
+        model=REVIEW_MODEL)
+    obj = parse_json_reply(raw)
+    return {"ok": bool(obj.get("ok", False)), "reason": str(obj.get("reason", ""))}
 
 
 # --- HTML rendering (shared brand stylesheet at /page.css) --------------------
@@ -731,6 +769,13 @@ def generate_story_pages(picks: list[dict], date) -> dict:
             summary = summarize_story(item)
             if summary is None:
                 continue
+            verdict = review_summary(item, summary)  # independent grounding check
+            if not verdict.get("ok"):
+                print(f"[update_joy] story page failed review ({item.get('url','')}): "
+                      f"{verdict.get('reason','')}", file=sys.stderr)
+                log_skip(f"review:{verdict.get('reason','')[:60]}",
+                         url=item.get("url", ""), date=date)
+                continue
             slug = render_story_page(item, summary, date)
             if slug:
                 rendered[item.get("url", "")] = f"/story/{slug}/"
@@ -884,11 +929,11 @@ def main(force: bool = False) -> int:
     try:
         llm_off = os.environ.get("GHI_LLM") == "off"
         story_map: dict[str, str] = {}
-        if picks and (os.environ.get("ANTHROPIC_API_KEY") or llm_off):
+        if picks and ((os.environ.get("CLOUDFLARE_API_TOKEN") and WORKERS_AI_ACCOUNT) or llm_off):
             story_map = generate_story_pages(picks, date)
             print(f"[update_joy] story pages: {len(story_map)} linked")
         elif picks:
-            print("[update_joy] no ANTHROPIC_API_KEY — story-page generation skipped "
+            print("[update_joy] no CLOUDFLARE_API_TOKEN — story-page generation skipped "
                   "(postcard unaffected)")
         write_today_pages(date, story_map, task)
         regenerate_plumbing(date)

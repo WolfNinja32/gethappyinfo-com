@@ -30,9 +30,11 @@ jobs:
 
       - name: Refresh joy.json
         env:
-          # Story-page summaries (Claude Haiku via stdlib urllib). Optional: with no
-          # key the run is skip-only — the daily postcard never depends on it.
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          # Story-page summaries via free Cloudflare Workers AI (Kimi K2.6, reasoning
+          # off) over stdlib urllib. Optional: with no token the run is skip-only — the
+          # daily postcard never depends on it. Account ID is not secret; token is.
+          CLOUDFLARE_ACCOUNT_ID: "130f3aaa660ea95551e837c8d2ba4b21"
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: python scripts/update_joy.py
 
       - name: Commit if changed
