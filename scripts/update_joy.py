@@ -21,6 +21,7 @@ import json
 import os
 import re
 import sys
+import urllib.error
 import urllib.request
 import xml.etree.ElementTree as ET
 from datetime import datetime
@@ -419,8 +420,14 @@ def call_workers_ai(prompt: str, model: str = WRITER_MODEL,
         "Content-Type": "application/json",
         "User-Agent": USER_AGENT,
     })
-    with urllib.request.urlopen(req, timeout=WORKERS_AI_TIMEOUT) as resp:
-        payload = json.loads(resp.read())
+    try:
+        with urllib.request.urlopen(req, timeout=WORKERS_AI_TIMEOUT) as resp:
+            payload = json.loads(resp.read())
+    except urllib.error.HTTPError as exc:
+        # Surface Cloudflare's actual error body (which permission / what's wrong)
+        # instead of a bare "HTTP 401" — turn the failure into evidence.
+        detail = exc.read().decode("utf-8", "replace")[:400]
+        raise RuntimeError(f"workers-ai HTTP {exc.code} on {model}: {detail}") from None
     if not payload.get("success", False):
         raise ValueError(f"workers-ai error: {payload.get('errors')}")
     result = payload.get("result") or {}
