@@ -16,5 +16,23 @@
     "reason": "error:HTTPError",
     "url": "https://www.goodnewsnetwork.org/artsy-types-may-age-better-music-and-museums-act-as-exercise-slowing-age-by-4-says-study",
     "slug": ""
+  },
+  {
+    "date": "2026-06-04",
+    "reason": "error:RuntimeError",
+    "url": "https://www.goodnewsnetwork.org/the-one-of-a-kind-kruger-national-park-celebrates-100th-anniversary-of-protecting-african-wildlife",
+    "slug": ""
+  },
+  {
+    "date": "2026-06-04",
+    "reason": "error:RuntimeError",
+    "url": "https://www.goodnewsnetwork.org/free-ice-cream-gift-for-one-child-prompts-donations-to-fund-free-sweets-for-all-kids-the-entire-summer",
+    "slug": ""
+  },
+  {
+    "date": "2026-06-04",
+    "reason": "error:RuntimeError",
+    "url": "https://www.goodnewsnetwork.org/australia-becomes-30th-country-to-eliminate-trachoma-leading-cause-of-infectious-blindness",
+    "slug": ""
   }
 ]
