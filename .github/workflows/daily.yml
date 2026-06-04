@@ -9,7 +9,12 @@ on:
     # the Worker already updated today's postcard, update_joy.py's idempotency guard
     # makes this backup run a clean no-op.
     - cron: "0 14 * * *"
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Regenerate today's postcard even if it's already current (passes --force)"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -35,7 +40,7 @@ jobs:
           # daily postcard never depends on it. Account ID is not secret; token is.
           CLOUDFLARE_ACCOUNT_ID: "130f3aaa660ea95551e837c8d2ba4b21"
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        run: python scripts/update_joy.py
+        run: python scripts/update_joy.py ${{ inputs.force && '--force' || '' }}
 
       - name: Commit if changed
         run: |
