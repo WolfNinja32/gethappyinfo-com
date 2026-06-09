@@ -242,6 +242,33 @@
           "url": "https://www.goodnewsnetwork.org/orcas-are-returning-to-uk-coast-in-numbers-rarely-seen-watch"
         }
       ]
+    },
+    "2026-06-09": {
+      "dailyTask": "Share a song that always lifts you up.",
+      "lastUpdated": "2026-06-09",
+      "topNews": [
+        {
+          "creator": "Good News Network",
+          "date": "2026-05-17",
+          "excerpt": "Rescuers raced to save a stranded penguin after a jogger spotted it and called for help. Two weeks ago, wildlife veterinarian Catherine Hauw was alerted that there was an African penguin lying helplessly on a beach with its head buried in the sand. The 35-year-old medic rushed to the scene at Brenton-on-Sea in South Africa",
+          "text": "Jogger\u2019s Call for Help Saves Critically-Endangered Penguin Found Face-Down on the Beach",
+          "url": "https://www.goodnewsnetwork.org/jogger-call-for-help-saves-critically-endangered-penguin-found-face-down-on-the-beach"
+        },
+        {
+          "creator": "Andy Corbley",
+          "date": "2026-06-08",
+          "excerpt": "For a planet to be habitable, it\u2019s generally considered to need liquid water. To have liquid water, a planet needs an atmosphere. To have an atmosphere, it\u2019s understood a world needs a magnetosphere, and for the first time ever, a team of astronomers has found the strongest evidence yet of magnetic fields\u2014like Earth and Jupiter,",
+          "text": "Astronomers Open \u2018New Window\u2019 on Exoplanets After Landmark First Detection of Magnetospheres",
+          "url": "https://www.goodnewsnetwork.org/astronomers-open-new-window-on-exoplanets-after-landmark-first-detection-of-magnetospheres"
+        },
+        {
+          "creator": "Good News Network",
+          "date": "2026-06-07",
+          "excerpt": "A historic Hudson Valley estate built in 1895 is reopening as a wedding venue and retreat\u2014and the owners, a husband-and-wife team, are inaugurating the restored property by giving away a free wedding to the couple who tells the best story. Pine Brook Manor, about 90 minutes from New York City, includes 110 acres of pine",
+          "text": "Win a Free Wedding at Historic Hudson Valley Estate For Couple With the Best Story",
+          "url": "https://www.goodnewsnetwork.org/win-a-free-wedding-at-historic-hudson-valley-estate-for-couple-with-best-story"
+        }
+      ]
     }
   }
 }
