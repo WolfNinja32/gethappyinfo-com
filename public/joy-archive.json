@@ -296,6 +296,33 @@
           "url": "https://www.goodnewsnetwork.org/senior-scholar-fulfills-life-long-dream-to-graduate-medical-school-a-doctor-at-73-years-young"
         }
       ]
+    },
+    "2026-06-11": {
+      "dailyTask": "Mail a handwritten letter to someone you love.",
+      "lastUpdated": "2026-06-11",
+      "topNews": [
+        {
+          "creator": "Andy Corbley",
+          "date": "2026-06-11",
+          "excerpt": "A globally-important colony for seabirds has been sold to the Royal Society for the Protection of Birds to ensure the 100,000 gannets and 10,000 puffins that live there will benefit from top-notch conservation management. Owned by the Scottish noble Dalrymple family for 320 years, Bass Rock and the neighboring uninhabited island of Craigleith have long",
+          "text": "Family That Owned This \u2018Wildlife Wonder of the World\u2019 for 300 years Sells Bass Rock to Protect 100,000 Gannet Seabirds",
+          "url": "https://www.goodnewsnetwork.org/noble-family-sells-wildlife-wonder-of-the-world-bass-rock-to-protect-100000-strong-seabird-population"
+        },
+        {
+          "creator": "Andy Corbley",
+          "date": "2026-06-10",
+          "excerpt": "As May drew to a close, a US district court issued a ruling that the federal government\u2019s attempts to undercut Endangered Species Act protections for the sake of coal mining were illegal. Coal mines had been allowed to rely on a streamlined process that did not require an analysis of the harm they actually cause",
+          "text": "Loophole in Endangered Species Act Is Closed to Coal Miners After Court Ruling",
+          "url": "https://www.goodnewsnetwork.org/loophole-through-endangered-species-act-protections-closed-for-coal-miners-after-court-ruling"
+        },
+        {
+          "creator": "Andy Corbley",
+          "date": "2026-06-10",
+          "excerpt": "In an impressive early demonstration of a potentially revolutionary technology, biotech engineers in Zurich used micro-sized robots and stem cells to restore normal movement in a mouse whose spinal cord was entirely severed. The tech was also demonstrated in zebrafish, and the engineers behind the demonstration say it brings multiple advantages over existing, similar methods.",
+          "text": "Mouse with Severed Spinal Cord Recovers \u2018Normal\u2019 Movement After Potentially Revolutionary Treatment",
+          "url": "https://www.goodnewsnetwork.org/mouse-with-severed-spinal-cord-recovers-normal-movement-after-potentially-revolutionary-treatment"
+        }
+      ]
     }
   }
 }
