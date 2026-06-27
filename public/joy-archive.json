@@ -728,6 +728,33 @@
           "url": "https://www.goodnewsnetwork.org/perseverance-mars-rover-completes-a-marathon-on-mars-to-cap-off-extraordinary-5-years"
         }
       ]
+    },
+    "2026-06-27": {
+      "dailyTask": "Leave the porch light on for someone coming home late.",
+      "lastUpdated": "2026-06-27",
+      "topNews": [
+        {
+          "creator": "Andy Corbley",
+          "date": "2026-06-10",
+          "excerpt": "From Chicago comes the story of a married couple who held up home construction to save a bird\u2019s nest, and of the construction company who promised to halt work. Brought to us by the Tribune\u2019s Audrey Pachuta, Ray and Shelly Romolt fancy themselves as good neighbors and so were delighted to hear that the empty",
+          "text": "Chicago Home Builder Lauded for Halting Construction Just to Save Killdeer Nest",
+          "url": "https://www.goodnewsnetwork.org/chicago-home-builder-lauded-for-halting-construction-just-to-save-killdeer-nest"
+        },
+        {
+          "creator": "Andy Corbley",
+          "date": "2026-06-11",
+          "excerpt": "Okay, so you can\u2019t read Japanese, but you\u2019ll want to keep scrolling to see what this \u201calmost too kind\u201d 7-Eleven owner had to say to his customers. Located in several cities in Niigata Prefecture, western Japan, signs inviting customers to come in and cool off suddenly popped up at 3 such convenience stores. \u201cIf you",
+          "text": "7-11 Owner Pays Forward Kindness from Decade Ago with Viral Signs Offering Shelter from Scorching Heat",
+          "url": "https://www.goodnewsnetwork.org/7-eleven-owner-pays-forward-kindness-from-a-decade-ago-with-viral-signs-offering-shelter-from-scorching-heat"
+        },
+        {
+          "creator": "Good News Network",
+          "date": "2026-06-27",
+          "excerpt": "A hospital in south London opened a garden on its rooftop where Critical Care patients can spend hours in the fresh air and sunlight. ICU patients visiting the rooftop garden receive \u201cfull life support\u201d while experiencing the therapeutic benefits of the natural surroundings. Located on top of the hospital\u2019s 60-bed critical care unit, King\u2019s College",
+          "text": "Hospital Opens Roof Garden Where Critical Care Patients Can Enjoy the Outdoors for Hours With Full Care",
+          "url": "https://www.goodnewsnetwork.org/hospital-opens-roof-garden-where-critical-care-patients-can-enjoy-outdoors-for-hours"
+        }
+      ]
     }
   }
 }
