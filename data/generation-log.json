@@ -844,5 +844,23 @@
     "reason": "error:RuntimeError",
     "url": "https://www.goodnewsnetwork.org/scientists-identify-climate-resistant-coral-reefs-around-the-world-totaling-the-size-of-wisconsin",
     "slug": ""
+  },
+  {
+    "date": "2026-07-18",
+    "reason": "error:RuntimeError",
+    "url": "https://www.goodnewsnetwork.org/30-beluga-whales-finally-rescued-after-2-years-waiting-in-shuttered-theme-park",
+    "slug": ""
+  },
+  {
+    "date": "2026-07-18",
+    "reason": "error:RuntimeError",
+    "url": "https://www.goodnewsnetwork.org/it-takes-a-village-to-raise-a-child-but-this-lonely-4-yo-first-had-to-raise-his-neighborhood-watch",
+    "slug": ""
+  },
+  {
+    "date": "2026-07-18",
+    "reason": "error:RuntimeError",
+    "url": "https://www.goodnewsnetwork.org/southeast-asia-nears-malaria-elimination-down-two-thirds-since-2010",
+    "slug": ""
   }
 ]
