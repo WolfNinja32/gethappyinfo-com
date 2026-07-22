@@ -1403,6 +1403,33 @@
           "url": "https://www.goodnewsnetwork.org/great-smokey-mountains-will-soon-get-even-greater-thanks-to-nonprofits-land-purchase"
         }
       ]
+    },
+    "2026-07-22": {
+      "dailyTask": "Send a meme that says \"thinking of you.\"",
+      "lastUpdated": "2026-07-22",
+      "topNews": [
+        {
+          "creator": "Andy Corbley",
+          "date": "2026-07-21",
+          "excerpt": "When news reaches the public that a new species has been identified, the chances really are 9 times out of 10 that it\u2019s some deep sea slug or a spider. From the Congo comes the story of the exception\u2014a new species of colobus monkey has been identified, becoming just the 5th such occasion in 75",
+          "text": "New Species of Monkey Found in DR Congo Shows How Much There\u2019s Left to Discover",
+          "url": "https://www.goodnewsnetwork.org/new-species-of-monkey-with-orange-lips-found-in-dr-congo-for-just-the-5th-time-in-75-years"
+        },
+        {
+          "creator": "Andy Corbley",
+          "date": "2026-07-20",
+          "excerpt": "At the intersection of big data, forestry, and genomics, a biotech startup has birthed a generation of \u201celite\u201d blight-resistant American chestnut trees through a single gene insertion, rather than deep genetic tinkering. The company is inspired by saving American hardwoods that have been ravaged by an introduced fungal disease, and says their proprietary approach could",
+          "text": "Biotech Startup Breeds Blight Tolerant American Chestnut with Long-Term Viability",
+          "url": "https://www.goodnewsnetwork.org/biotech-startup-breeds-blight-tolerant-american-chestnut-without-any-genetic-defects"
+        },
+        {
+          "creator": "Good News Network",
+          "date": "2026-07-18",
+          "excerpt": "A daughter helped save her father\u2019s vintage Italian shoe shop by posting about a pair of Y2K kitten heels on TikTok\u2014and now it has lines outside the door. For over 30 years Rachid Lazraq has owned Rich Collection Italia, but the emergence of online shopping practices, and an aging clientele, left the store in East",
+          "text": "Daughter Saves Dad\u2019s Struggling Shoe Shop With TikTok Appeal\u2014And Customer Lines Out the Door",
+          "url": "https://www.goodnewsnetwork.org/daughter-saves-dads-struggling-shoe-shop-with-tiktok-appeal-and-customer-lines-out-the-door"
+        }
+      ]
     }
   }
 }
