@@ -1565,6 +1565,33 @@
           "url": "https://www.goodnewsnetwork.org/this-outback-barber-visits-remote-island-to-host-hairstyling-workshop-bringing-fresh-hope-and-hairdoos"
         }
       ]
+    },
+    "2026-07-28": {
+      "dailyTask": "Give someone the benefit of the doubt today.",
+      "lastUpdated": "2026-07-28",
+      "topNews": [
+        {
+          "creator": "Good News Network",
+          "date": "2026-07-26",
+          "excerpt": "A lazy retirement was bestowed upon the last circus elephant in Portugal who just became a resident of the country\u2019s first sanctuary dedicated to working pachyderms. After 40 years of performing, Julie was transported on June 30 from her old circus home to the Pangea Elephant Sanctuary in Alentejo. Julie was captured as a calf",
+          "text": "Last Circus Elephant in Portugal Can Now Romp-and-Roll on 1000-Acre Sanctuary After 40 Years of Working",
+          "url": "https://www.goodnewsnetwork.org/last-circus-elephant-in-portugal-welcomed-to-pangea-sanctuary"
+        },
+        {
+          "creator": "Good News Network",
+          "date": "2026-07-26",
+          "excerpt": "Air quality continues to improve across Europe, with emissions from most of the major pollutants declining by significant amounts. \u201cThe overall picture remains positive,\u201d according to the annual Assessment Report on European Air Quality 2025, released by the Copernicus Atmosphere Monitoring Service (CAMS), an EU program that has monitored changing air pollution levels for over",
+          "text": "Europe\u2019s Air Quality Dramatically Improves in 10 Years, With 39-59% Drop in Industrial and Road Toxins",
+          "url": "https://www.goodnewsnetwork.org/europes-air-quality-dramatically-improved-with-39-59-drop-in-industrial-and-road-emissions"
+        },
+        {
+          "creator": "Good News Network",
+          "date": "2026-07-12",
+          "excerpt": "Japanese scientists have discovered a naturally-occurring bacteria in a frog species with remarkably-potent anticancer activity\u2014in fact, it destroyed cancer tumors in one dose. Led by Professor Eijiro Miyako, the team at Japan\u2019s Advanced Institute of Science and Technology discovered that a natural bacteria from the intestines of a Japanese tree frog (Ewingella americana) achieved a",
+          "text": "Japanese Team Finds Frog Bacteria That Wipes Out Cancer Tumors With a Single Dose",
+          "url": "https://www.goodnewsnetwork.org/japanese-find-frog-bacteria-that-wipes-out-cancer-tumors-with-a-single-dose"
+        }
+      ]
     }
   }
 }
