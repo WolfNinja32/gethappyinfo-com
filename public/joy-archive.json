@@ -2240,6 +2240,33 @@
           "url": "https://www.goodnewsnetwork.org/experimental-drug-generates-immune-response-against-pancreatic-cancer-in-people-at-high-risk"
         }
       ]
+    },
+    "2026-08-22": {
+      "dailyTask": "Write a postcard to someone far away.",
+      "lastUpdated": "2026-08-22",
+      "topNews": [
+        {
+          "creator": "Andy Corbley",
+          "date": "2026-08-21",
+          "excerpt": "It was June 23rd when a furry brown arrow shot past a motion-activated camera along the Bronx River and sent conservationists mad with excitement. It was the first time in approximately 100 years that an otter was observed in this borough of New York City, and provided compelling evidence that decades of conservation and restoration",
+          "text": "First River Otter Spotted in the Bronx in 100 Years Along the Bronx River",
+          "url": "https://www.goodnewsnetwork.org/first-river-otter-spotted-in-the-bronx-in-100-years-along-the-bronx-river"
+        },
+        {
+          "creator": "Andy Corbley",
+          "date": "2026-08-21",
+          "excerpt": "It\u2019s estimated that over 110 million Chinese live and work abroad, which for the family members they leave behind can be heart-wrenching and difficult, above all for the elderly. But thanks to a generous soul born to the mountain paths of Hubei Province, these severed family ties are being reconnected through social media and delivery",
+          "text": "Man Makes 200+ Trips to Remote Villages to Connect Elders with Their Children Working Abroad",
+          "url": "https://www.goodnewsnetwork.org/man-makes-200-trips-to-remote-villages-to-connect-elders-with-their-children-working-abroad"
+        },
+        {
+          "creator": "Andy Corbley",
+          "date": "2026-08-05",
+          "excerpt": "New HIV infections and AIDS-related deaths are at their lowest levels in more than 30 years, a special report released by UNAIDS shows. Released in time for the 26th International AIDS Conference taking place in Rio de Janeiro, it also showed that 7 countries: Benin, Eswatini, Kenya, Lesotho, Nepal, Rwanda, and Zimbabwe, achieved an almost",
+          "text": "UN Summit on HIV/AIDS Shows Incredible Progress in Infection Rates, Deaths, Treatment Access",
+          "url": "https://www.goodnewsnetwork.org/un-summit-on-hiv-aids-shows-incredible-progress-in-infection-rates-deaths-treatment-access"
+        }
+      ]
     }
   }
 }
