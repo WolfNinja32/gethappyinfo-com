@@ -2537,6 +2537,33 @@
           "url": "https://www.goodnewsnetwork.org/in-london-childrens-lungs-grow-faster-as-traffic-pollution-falls"
         }
       ]
+    },
+    "2026-09-02": {
+      "dailyTask": "Leave a book you loved somewhere for a stranger to find.",
+      "lastUpdated": "2026-09-02",
+      "topNews": [
+        {
+          "creator": "Daniel Samadani",
+          "date": "2026-08-14",
+          "excerpt": "Fifteen years ago, conservationists began releasing rescued orangutans into a protected forest in Sumatra where no others from their species were living. Some arrived had been in human care after being orphaned. Others had been rescued from conflict situations or captivity and needed months or years of rehabilitation before they could safely be returned to",
+          "text": "Rescued Orangutans Released Into Isolated Forest Are Now Raising Babies, Creating New Wild Population",
+          "url": "https://www.goodnewsnetwork.org/rescued-orangutans-released-into-empty-forest-now-raising-babies"
+        },
+        {
+          "creator": "Andy Corbley",
+          "date": "2026-09-01",
+          "excerpt": "A heartwarming story of a community putting values above value comes from the convention floor of Pok\u00e9mon XP. At the August 29th event in San Francisco, venture capitalist Eric Bahn shared that his son was scammed while trading Pok\u00e9mon cards with an adult. \u201cLost his most valuable cards in a fraudulent trade by some guy",
+          "text": "Pok\u00e9mon Fans Rally to Help Child After He Was Scammed Out of His Most Valuable Card",
+          "url": "https://www.goodnewsnetwork.org/pokemon-fans-rally-to-help-child-after-he-was-scammed-out-of-his-most-valuable-card"
+        },
+        {
+          "creator": "Daniel Samadani",
+          "date": "2026-08-14",
+          "excerpt": "For caregivers of children living with chronic or rare lung diseases, monitoring their condition presents an uncomfortable tradeoff: Repeated scans can be valuable, but they can also expose patients to radiation. Now, a rapidly advancing form of MRI is offering another possibility: detailed images of children\u2019s lungs that can reveal not only their structure, but",
+          "text": "New Radiation-Free Lung Scan Can Spot Disease Sooner in Children \u2013 And it\u2019s Much Safer",
+          "url": "https://www.goodnewsnetwork.org/new-radiation-free-lung-scan-could-help-doctors-spot-disease-in-children-earlier"
+        }
+      ]
     }
   }
 }
