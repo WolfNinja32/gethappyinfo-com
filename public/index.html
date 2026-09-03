@@ -515,11 +515,22 @@
       if (yearEl) yearEl.textContent = new Date().getFullYear();
 
       var fallbackTask = 'Do one small, kind thing for someone today.';
-      var shareUrl = window.location.origin + '/';
 
       // /YYYY-MM-DD permalink → archive lookup; otherwise today.
       var pathMatch = window.location.pathname.match(/^\/(\d{4}-\d{2}-\d{2})\/?$/);
       var archiveDate = pathMatch ? pathMatch[1] : null;
+
+      // Always share a dated postcard URL (never bare /).
+      function laTodayIso() {
+        return new Intl.DateTimeFormat('en-CA', {
+          timeZone: 'America/Los_Angeles',
+          year: 'numeric', month: '2-digit', day: '2-digit'
+        }).format(new Date());
+      }
+      function datedShareUrl(iso) {
+        return window.location.origin + '/' + iso;
+      }
+      var shareUrl = datedShareUrl(archiveDate || laTodayIso());
 
       function dateParts(iso) {
         var m = (iso || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
@@ -577,7 +588,7 @@
           editionEl.textContent = days > 0
             ? 'gethappyinfo.com · no. ' + days
             : 'gethappyinfo.com · ' + parts.iso;
-          shareUrl = window.location.origin + '/' + parts.iso;
+          shareUrl = datedShareUrl(parts.iso);
           document.title = 'Get Happy Info — ' + parts.monthShort + ' ' + parts.day + ', ' + parts.year;
         }
       }
@@ -585,6 +596,7 @@
       function renderArchiveMiss(reqDate) {
         taskEl.textContent = 'No postcard from that day — yet.';
         newsEl.innerHTML = '<li class="empty">This day hasn\'t been written. <a href="/" style="color: var(--postal-red); text-decoration: underline;">Read today\'s postcard →</a></li>';
+        shareUrl = datedShareUrl(reqDate);
         var parts = dateParts(reqDate);
         if (parts) {
           postmarkDate.textContent = parts.monthShort + ' ' + parts.day;
@@ -667,7 +679,8 @@
       }
 
       sendBtn.addEventListener('click', async function () {
-        var text = "Take a look at the Happiness Postcard site I found.";
+        var line = (taskEl.textContent || fallbackTask).trim();
+        var text = "Today's kindness from Get Happy: " + line;
         var shareMessage = text + ' ' + shareUrl;
         try {
           if (navigator.share) {
