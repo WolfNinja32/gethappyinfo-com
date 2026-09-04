@@ -409,6 +409,41 @@ def load_prompt(marker: str) -> str:
     return m.group(1).strip()
 
 
+def _coerce_completion_text(value) -> str:
+    """Normalize a Workers AI completion value to a string for callers.
+
+    Kimi/Workers AI sometimes returns `result.response` (or message content) as a
+    parsed JSON object rather than a string. Dict/list → json.dumps so
+    parse_json_reply can load them; other non-str → str().
+    """
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value
+    if isinstance(value, (dict, list)):
+        return json.dumps(value, ensure_ascii=False)
+    return str(value)
+
+
+def _completion_text_from_result(result: dict) -> str:
+    """Extract completion text from a Workers AI `result` object.
+
+    Supports simple `{response}` and OpenAI-style `{choices:[{message:{content}}]}`.
+    Coerces non-string payloads before the empty check (`.strip()` requires str).
+    """
+    if not isinstance(result, dict):
+        result = {}
+    text = result.get("response")
+    if text is None or text == "":
+        choices = result.get("choices") or []
+        if choices:
+            text = (choices[0].get("message") or {}).get("content")
+    text = _coerce_completion_text(text)
+    if not text.strip():
+        raise ValueError("empty completion")
+    return text
+
+
 def call_workers_ai(prompt: str, model: str = WRITER_MODEL,
                     params: dict | None = None) -> str:
     """POST a single user message to Cloudflare Workers AI via urllib and return the
@@ -439,15 +474,7 @@ def call_workers_ai(prompt: str, model: str = WRITER_MODEL,
     if not payload.get("success", False):
         raise ValueError(f"workers-ai error: {payload.get('errors')}")
     result = payload.get("result") or {}
-    # Two response shapes: simple {response} or OpenAI-style {choices:[{message:{content}}]}.
-    text = result.get("response")
-    if not text:
-        choices = result.get("choices") or []
-        if choices:
-            text = (choices[0].get("message") or {}).get("content") or ""
-    if not text or not text.strip():
-        raise ValueError("empty completion")
-    return text
+    return _completion_text_from_result(result)
 
 
 def _extract_json_string_field(text: str, key: str) -> str | None:
@@ -1037,6 +1064,27 @@ def workers_ai_configured() -> bool:
     return bool(token.strip() and (WORKERS_AI_ACCOUNT or "").strip())
 
 
+def _coerce_postcard_paragraph(value) -> str:
+    """Normalize writer `paragraph` field to a stripped string.
+
+    When the model returns a nested object instead of a string, try common
+    text keys, else json.dumps; other non-str values become str().
+    """
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value.strip()
+    if isinstance(value, dict):
+        for key in ("paragraph", "text", "content", "body"):
+            inner = value.get(key)
+            if isinstance(inner, str) and inner.strip():
+                return inner.strip()
+        return json.dumps(value, ensure_ascii=False).strip()
+    if isinstance(value, list):
+        return json.dumps(value, ensure_ascii=False).strip()
+    return str(value).strip()
+
+
 def write_postcard_paragraph(line: str, seed: dict | None) -> str | None:
     """Writer mode: return paragraph text or None on failure.
 
@@ -1076,7 +1124,7 @@ def write_postcard_paragraph(line: str, seed: dict | None) -> str | None:
     )
     raw = call_workers_ai(prompt, model=WRITER_MODEL, params=WRITER_PARAMS)
     obj = parse_json_reply(raw)
-    para = (obj.get("paragraph") or "").strip()
+    para = _coerce_postcard_paragraph(obj.get("paragraph"))
     if not para:
         raise ValueError("postcard reply missing paragraph")
     return para
@@ -1105,7 +1153,11 @@ def review_postcard(paragraph: str, *, line: str, seed: dict | None) -> dict:
         )
     raw = call_workers_ai(prompt, model=REVIEW_MODEL)
     obj = parse_json_reply(raw)
-    return {"ok": bool(obj.get("ok", False)), "reason": str(obj.get("reason", ""))}
+    # ok/reason may arrive non-scalar if the model nested JSON; never .strip() raw.
+    reason = obj.get("reason", "")
+    if not isinstance(reason, str):
+        reason = json.dumps(reason, ensure_ascii=False) if isinstance(reason, (dict, list)) else str(reason)
+    return {"ok": bool(obj.get("ok", False)), "reason": reason}
 
 
 def find_last_good_card(existing, archive: dict) -> dict | None:

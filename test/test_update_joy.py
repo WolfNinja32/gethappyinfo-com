@@ -154,6 +154,57 @@ class TestParseJsonReply(unittest.TestCase):
             uj.parse_json_reply('{"foo": "bar", "baz":')
 
 
+
+class TestCompletionTextFromResult(unittest.TestCase):
+    """Workers AI sometimes returns result.response as a parsed object."""
+
+    def test_string_response(self):
+        out = uj._completion_text_from_result({"response": "  hello  "})
+        self.assertEqual(out, "  hello  ")
+
+    def test_dict_response_json_dumps(self):
+        payload = {"paragraph": "A small kindness on the bus."}
+        out = uj._completion_text_from_result({"response": payload})
+        self.assertEqual(json.loads(out), payload)
+
+    def test_list_response_json_dumps(self):
+        payload = ["a", "b"]
+        out = uj._completion_text_from_result({"response": payload})
+        self.assertEqual(json.loads(out), payload)
+
+    def test_choices_message_content_string(self):
+        out = uj._completion_text_from_result({
+            "choices": [{"message": {"content": '{"ok": true}'}}],
+        })
+        self.assertEqual(out, '{"ok": true}')
+
+    def test_choices_message_content_dict(self):
+        content = {"ok": False, "reason": "invented a name"}
+        out = uj._completion_text_from_result({
+            "choices": [{"message": {"content": content}}],
+        })
+        self.assertEqual(json.loads(out), content)
+
+    def test_empty_raises(self):
+        with self.assertRaises(ValueError):
+            uj._completion_text_from_result({"response": ""})
+        with self.assertRaises(ValueError):
+            uj._completion_text_from_result({"response": "   "})
+        with self.assertRaises(ValueError):
+            uj._completion_text_from_result({})
+
+    def test_coerce_postcard_paragraph_dict_common_key(self):
+        self.assertEqual(
+            uj._coerce_postcard_paragraph({"text": " Nested para. "}),
+            "Nested para.",
+        )
+
+    def test_coerce_postcard_paragraph_non_str(self):
+        self.assertEqual(uj._coerce_postcard_paragraph(42), "42")
+        self.assertEqual(uj._coerce_postcard_paragraph(None), "")
+
+
+
 class TestJoyContract(TmpEnv):
     def test_new_joy_shape(self):
         """Acceptance 1: four-key shape; seed optional; no ps; no topNews."""
