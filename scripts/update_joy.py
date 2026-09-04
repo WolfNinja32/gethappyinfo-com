@@ -450,15 +450,99 @@ def call_workers_ai(prompt: str, model: str = WRITER_MODEL,
     return text
 
 
+def _extract_json_string_field(text: str, key: str) -> str | None:
+    """Pull a JSON string field out of broken JSON.
+
+    Starts at `"key": "`. Handles `\\` / `\"` (and other JSON string escapes).
+    An unescaped `"` ends the value only when the next non-space char is `,`
+    or `}`; otherwise it is treated as an inner quote (the usual Kimi failure).
+    If several such terminators exist, the last one wins so inner `"hi", then`
+    prose does not truncate the field.
+    """
+    m = re.search(rf'"{re.escape(key)}"\s*:\s*"', text)
+    if not m:
+        return None
+    i = m.end()
+    n = len(text)
+    chars: list[str] = []
+    last_term: str | None = None
+    escapes = {
+        '"': '"',
+        "\\": "\\",
+        "/": "/",
+        "n": "\n",
+        "t": "\t",
+        "r": "\r",
+        "b": "\b",
+        "f": "\f",
+    }
+    while i < n:
+        ch = text[i]
+        if ch == "\\" and i + 1 < n:
+            nxt = text[i + 1]
+            if nxt == "u" and i + 5 < n:
+                hexpart = text[i + 2 : i + 6]
+                try:
+                    chars.append(chr(int(hexpart, 16)))
+                    i += 6
+                    continue
+                except ValueError:
+                    pass
+            chars.append(escapes.get(nxt, nxt))
+            i += 2
+            continue
+        if ch == '"':
+            j = i + 1
+            while j < n and text[j] in " \t\r\n":
+                j += 1
+            if j >= n or text[j] in ",}":
+                last_term = "".join(chars)
+            chars.append('"')
+            i += 1
+            continue
+        chars.append(ch)
+        i += 1
+    return last_term
+
+
+def _extract_json_bool_field(text: str, key: str) -> bool | None:
+    m = re.search(rf'"{re.escape(key)}"\s*:\s*(true|false)\b', text)
+    if not m:
+        return None
+    return m.group(1) == "true"
+
+
+def _salvage_json_reply(text: str) -> dict | None:
+    paragraph = _extract_json_string_field(text, "paragraph")
+    if paragraph is not None:
+        return {"paragraph": paragraph}
+    ok = _extract_json_bool_field(text, "ok")
+    if ok is not None:
+        reason = _extract_json_string_field(text, "reason")
+        return {"ok": ok, "reason": reason if reason is not None else ""}
+    return None
+
+
 def parse_json_reply(text: str) -> dict:
-    """The prompts demand a bare JSON object; tolerate stray prose / code fences."""
+    """The prompts demand a bare JSON object; tolerate stray prose / code fences.
+
+    If json.loads (and a `{...}` slice) still fail — typically unescaped quotes
+    inside `paragraph` — salvage postcard `{paragraph}` or review `{ok, reason}`.
+    """
     try:
         return json.loads(text)
-    except json.JSONDecodeError:
-        m = re.search(r"\{.*\}", text, re.S)
-        if not m:
-            raise
-        return json.loads(m.group(0))
+    except json.JSONDecodeError as first:
+        err = first
+    m = re.search(r"\{.*\}", text, re.S)
+    if m:
+        try:
+            return json.loads(m.group(0))
+        except json.JSONDecodeError as second:
+            err = second
+    salvaged = _salvage_json_reply(text)
+    if salvaged is not None:
+        return salvaged
+    raise err
 
 
 # --- content gates (one canonical failure path: skip + log) ------------------
