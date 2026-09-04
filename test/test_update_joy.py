@@ -369,6 +369,11 @@ class TestVoicePrompts(unittest.TestCase):
         self.assertIn("{{SEED_BLOCK}}", pc)
         seeded = uj.load_prompt("POSTCARD REVIEW SEEDED")
         self.assertIn("{{SUMMARY}}", seeded)
+        # Seeded grounding must allow scenic illustration of the seed's stated deed
+        # (false-reject fix: e.g. "dance moves described" when seed is dance-for-discount).
+        self.assertIn("ALLOW and EXPECT concrete scenic description of the deed", seeded)
+        self.assertIn("Do NOT fail for illustrating the seed's deed", seeded)
+        self.assertIn("FAIL only on NEW verifiable claims", seeded)
         noseed = uj.load_prompt("POSTCARD REVIEW NOSEED")
         self.assertIn("{{LINE}}", noseed)
         self.assertIn("imagined", noseed.lower())
