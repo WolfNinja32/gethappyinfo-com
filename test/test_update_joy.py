@@ -117,6 +117,43 @@ class TestShapeHelpers(unittest.TestCase):
         }))
 
 
+class TestParseJsonReply(unittest.TestCase):
+    """Salvage broken Kimi JSON so writer/review replies still yield fields."""
+
+    def test_salvage_unescaped_quote_in_paragraph(self):
+        """Broken JSON with a raw quote inside paragraph still yields the text."""
+        body = (
+            "A woman on the late bus caught a stranger's eye and said "
+            '"you dropped this" while holding out a glove, then sat back '
+            "down as if it were nothing at all."
+        )
+        raw = '{\n  "paragraph": "' + body + '"\n}'
+        with self.assertRaises(json.JSONDecodeError):
+            json.loads(raw)
+        obj = uj.parse_json_reply(raw)
+        self.assertEqual(obj["paragraph"], body)
+
+    def test_salvage_broken_review_json(self):
+        """Broken review JSON with ok/reason still returns a dict."""
+        raw = (
+            '{\n  "ok": false,\n  "reason": "draft names "Maple Street" '
+            'which is not in the seed"\n}'
+        )
+        with self.assertRaises(json.JSONDecodeError):
+            json.loads(raw)
+        obj = uj.parse_json_reply(raw)
+        self.assertIsInstance(obj, dict)
+        self.assertFalse(obj["ok"])
+        self.assertIn("Maple Street", obj["reason"])
+
+    def test_raise_when_nothing_salvageable(self):
+        """Still raise JSONDecodeError when no paragraph/ok can be salvaged."""
+        with self.assertRaises(json.JSONDecodeError):
+            uj.parse_json_reply("not json at all")
+        with self.assertRaises(json.JSONDecodeError):
+            uj.parse_json_reply('{"foo": "bar", "baz":')
+
+
 class TestJoyContract(TmpEnv):
     def test_new_joy_shape(self):
         """Acceptance 1: four-key shape; seed optional; no ps; no topNews."""
