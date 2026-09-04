@@ -65,8 +65,8 @@ GEN_LOG_FILE = ROOT / "data" / "generation-log.json"
 # Writer is Kimi K2.6 with reasoning DISABLED (thinking:false): a model bake-off showed
 # reasoning-on is slow, costly, and frequently returns no output, while reasoning-off is
 # fast, reliable, and on-voice. Creds live only in env — CLOUDFLARE_API_TOKEN (a GitHub
-# secret, needs Workers AI:Read) + CLOUDFLARE_ACCOUNT_ID — both set in CI. With no token,
-# story-page generation is skipped entirely; the daily postcard never depends on it.
+# secret, needs Workers AI:Read) + CLOUDFLARE_ACCOUNT_ID (public; hardcoded in daily.yml).
+# Missing token → degrade; the daily postcard never blanks.
 WORKERS_AI_ACCOUNT = os.environ.get("CLOUDFLARE_ACCOUNT_ID", "")
 WORKERS_AI_URL = "https://api.cloudflare.com/client/v4/accounts/{account}/ai/run/{model}"
 WRITER_MODEL = "@cf/moonshotai/kimi-k2.6"

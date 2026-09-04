@@ -408,12 +408,12 @@ class TestIndexDualRead(unittest.TestCase):
 class TestWorkflowStdlib(unittest.TestCase):
     """Acceptance 9: AI optional; workflow still stdlib-friendly."""
 
-    def test_daily_yml_uses_account_secret(self):
+    def test_daily_yml_hardcodes_account_id_token_from_secret(self):
         yml = (REPO / ".github" / "workflows" / "daily.yml").read_text()
-        self.assertIn("secrets.CLOUDFLARE_ACCOUNT_ID", yml)
+        # Account ID is public/non-secret (hardcoded); only the API token is a secret.
+        self.assertIn('CLOUDFLARE_ACCOUNT_ID: "130f3aaa660ea95551e837c8d2ba4b21"', yml)
+        self.assertNotIn("secrets.CLOUDFLARE_ACCOUNT_ID", yml)
         self.assertIn("secrets.CLOUDFLARE_API_TOKEN", yml)
-        # Hardcoded account id removed so missing secret degrades green
-        self.assertNotIn("130f3aaa660ea95551e837c8d2ba4b21", yml)
 
 
 if __name__ == "__main__":
