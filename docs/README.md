@@ -122,7 +122,7 @@ agent-discovery plumbing. Plan + dual-reviewer (Codex + Gemini) audit trail:
   is the **only** grounding for the summary — we never store or publish the body.
 - `summarize_story()` calls **Cloudflare Workers AI — Kimi K2.6 with reasoning off**
   (`chat_template_kwargs.thinking:false`) via stdlib `urllib` POST to the Workers AI
-  REST API (free tier; token in `CLOUDFLARE_API_TOKEN` secret + `CLOUDFLARE_ACCOUNT_ID`;
+  REST API (free tier; `CLOUDFLARE_ACCOUNT_ID` hardcoded in workflow, token in `CLOUDFLARE_API_TOKEN` secret;
   no SDK). The voice + exact prompts live in `scripts/voice.md` (edit voice there; the
   pipeline follows). Model chosen by a 6-model bake-off; see [[v3-content-library]].
 - **One canonical gate-failure rule:** any failure — API error, hallucinated number

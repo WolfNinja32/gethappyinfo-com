@@ -11,10 +11,10 @@
   <meta charset="utf-8" />
   <title>Get Happy Info — a daily postcard of good</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="description" content="A small daily postcard: one kind act and a few pieces of good news, sent to your screen every morning." />
+  <meta name="description" content="A small daily postcard: one kind act and a short grounded paragraph, sent to your screen every morning." />
   <meta name="color-scheme" content="light" />
   <meta property="og:title" content="Get Happy Info — a daily postcard of good" />
-  <meta property="og:description" content="One kind act, three pieces of good news. Sent to your screen every morning." />
+  <meta property="og:description" content="One kind act, one short paragraph. Sent to your screen every morning." />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://gethappyinfo.com/" />
   <meta property="og:image" content="https://gethappyinfo.com/og-image.png" />
@@ -391,6 +391,29 @@
       }
     }
 
+
+    .kind-paragraph {
+      font-family: 'Fraunces', serif;
+      font-variation-settings: "opsz" 18, "wght" 400;
+      font-size: 1.02rem;
+      line-height: 1.55;
+      color: var(--ink);
+      margin: 0 0 1rem;
+    }
+    .seed-credit {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.68rem;
+      letter-spacing: 0.04em;
+      color: var(--ink-soft);
+      margin: 0.5rem 0 0;
+    }
+    .seed-credit a {
+      color: var(--postal-red);
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+    .world.is-empty .section-label { display: none; }
+
     @media (prefers-reduced-motion: reduce) {
       *, ::before, ::after {
         animation-duration: 0.001s !important;
@@ -503,6 +526,8 @@
     (async function () {
       var taskEl = document.getElementById('task');
       var newsEl = document.getElementById('news');
+      var worldEl = document.querySelector('.world');
+      var worldLabel = document.getElementById('world-label');
       var editionEl = document.getElementById('edition');
       var postmarkDate = document.getElementById('postmark-date');
       var postmarkYear = document.getElementById('postmark-year');
@@ -531,6 +556,8 @@
         return window.location.origin + '/' + iso;
       }
       var shareUrl = datedShareUrl(archiveDate || laTodayIso());
+      // Share line text (set by render); dual-read.
+      var shareLine = fallbackTask;
 
       function dateParts(iso) {
         var m = (iso || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
@@ -560,41 +587,88 @@
         return /^https?:\/\//i.test(u) ? encodeURI(u) : '#';
       }
 
-      function render(data) {
-        taskEl.textContent = data.dailyTask || fallbackTask;
+      // Shape gate: new iff non-empty line AND paragraph. Do not use date alone.
+      function isNewShape(data) {
+        return !!(data
+          && typeof data.line === 'string' && data.line.trim()
+          && typeof data.paragraph === 'string' && data.paragraph.trim());
+      }
+      function isOldShape(data) {
+        return !isNewShape(data) && !!(data && (data.lastUpdated || data.dailyTask));
+      }
 
-        var news = Array.isArray(data.topNews) ? data.topNews : [];
-        if (news.length === 0) {
-          newsEl.innerHTML = '<li class="empty">More good news on the way — check back soon.</li>';
-        } else {
-          newsEl.innerHTML = news.map(function (n, i) {
-            var url = safeUrl(n.url);
-            var text = escapeHtml(n.text);
-            var num = String(i + 1).padStart(2, '0');
-            return '<li><a href="' + url + '" target="_blank" rel="noopener noreferrer">'
-              + '<span class="bullet">' + num + '</span>'
-              + '<span class="text">' + text + '</span>'
-              + '<span class="arrow">↗</span></a></li>';
-          }).join('');
+      function applyPostmark(iso) {
+        var parts = dateParts(iso);
+        if (!parts) return;
+        postmarkDate.textContent = parts.monthShort + ' ' + parts.day;
+        postmarkYear.textContent = parts.year;
+        var d = new Date(parts.iso + 'T00:00:00Z');
+        var launch = new Date('2026-05-27T00:00:00Z');
+        var days = Math.floor((d - launch) / 86400000) + 1;
+        editionEl.textContent = days > 0
+          ? 'gethappyinfo.com · no. ' + days
+          : 'gethappyinfo.com · ' + parts.iso;
+        shareUrl = datedShareUrl(parts.iso);
+        document.title = 'Get Happy Info — ' + parts.monthShort + ' ' + parts.day + ', ' + parts.year;
+      }
+
+      function clearWorld() {
+        newsEl.innerHTML = '';
+        if (worldLabel) worldLabel.textContent = 'from the world';
+        if (worldEl) worldEl.classList.add('is-empty');
+      }
+
+      function renderNew(data, fallbackIso) {
+        taskEl.textContent = data.line;
+        shareLine = data.line;
+        if (worldLabel) worldLabel.textContent = 'a little more';
+        if (worldEl) worldEl.classList.remove('is-empty');
+        var para = '<p class="kind-paragraph">' + escapeHtml(data.paragraph) + '</p>';
+        var credit = '';
+        var seed = data.seed;
+        if (seed && seed.sourceTitle && seed.sourceUrl && safeUrl(seed.sourceUrl) !== '#') {
+          credit = '<p class="seed-credit">Source: <a href="' + safeUrl(seed.sourceUrl)
+            + '" target="_blank" rel="noopener noreferrer">'
+            + escapeHtml(seed.sourceTitle) + '</a></p>';
         }
+        newsEl.innerHTML = '<li style="border:0;padding:0;opacity:1;animation:none">' + para + credit + '</li>';
+        // Postmark: date, else URL path date, else LA today (never bare /).
+        var iso = (data.date && String(data.date)) || fallbackIso || archiveDate || laTodayIso();
+        applyPostmark(iso);
+      }
 
-        var parts = dateParts(data.lastUpdated);
-        if (parts) {
-          postmarkDate.textContent = parts.monthShort + ' ' + parts.day;
-          postmarkYear.textContent = parts.year;
-          var d = new Date(parts.iso + 'T00:00:00Z');
-          var launch = new Date('2026-05-27T00:00:00Z');
-          var days = Math.floor((d - launch) / 86400000) + 1;
-          editionEl.textContent = days > 0
-            ? 'gethappyinfo.com · no. ' + days
-            : 'gethappyinfo.com · ' + parts.iso;
-          shareUrl = datedShareUrl(parts.iso);
-          document.title = 'Get Happy Info — ' + parts.monthShort + ' ' + parts.day + ', ' + parts.year;
+      function renderOld(data) {
+        // Old archive: dailyTask only; show NOTHING for topNews.
+        taskEl.textContent = data.dailyTask || fallbackTask;
+        shareLine = data.dailyTask || fallbackTask;
+        clearWorld();
+        applyPostmark(data.lastUpdated || archiveDate || laTodayIso());
+      }
+
+      function renderNeither() {
+        // Corrupt / date-only / empty body — never paint empty new-day chrome.
+        taskEl.textContent = fallbackTask;
+        shareLine = fallbackTask;
+        clearWorld();
+        newsEl.innerHTML = '<li class="empty">More good news on the way — check back soon.</li>';
+        if (worldEl) worldEl.classList.remove('is-empty');
+      }
+
+      function render(data, fallbackIso) {
+        if (isNewShape(data)) {
+          renderNew(data, fallbackIso);
+        } else if (isOldShape(data)) {
+          renderOld(data);
+        } else {
+          renderNeither();
         }
       }
 
       function renderArchiveMiss(reqDate) {
         taskEl.textContent = 'No postcard from that day — yet.';
+        shareLine = fallbackTask;
+        if (worldEl) worldEl.classList.remove('is-empty');
+        if (worldLabel) worldLabel.textContent = 'from the world';
         newsEl.innerHTML = '<li class="empty">This day hasn\'t been written. <a href="/" style="color: var(--postal-red); text-decoration: underline;">Read today\'s postcard →</a></li>';
         shareUrl = datedShareUrl(reqDate);
         var parts = dateParts(reqDate);
@@ -604,42 +678,6 @@
           editionEl.textContent = 'gethappyinfo.com · ' + reqDate;
           document.title = 'Get Happy Info — ' + parts.monthShort + ' ' + parts.day + ', ' + parts.year;
         }
-      }
-
-      // Additive internal nav (V3 content library). Best-effort: fetches the tiny
-      // today-pages.json map and, when it matches today's postcard, adds an "our
-      // take" link to each headline's story page and links the task to its kindness
-      // page. Any failure is swallowed — the external links rendered above stand.
-      async function addLibraryLinks(joy) {
-        try {
-          var res = await fetch('/today-pages.json', { cache: 'no-cache' });
-          if (!res.ok) return;
-          var map = await res.json();
-          if (!map || map.date !== joy.lastUpdated) return;
-          var linkStyle = "display:inline-block;margin-left:2.1rem;margin-top:.2rem;"
-            + "font-family:'IBM Plex Mono',monospace;font-size:.64rem;letter-spacing:.08em;"
-            + "text-transform:uppercase;color:var(--postal-red);text-decoration:none";
-          var news = Array.isArray(joy.topNews) ? joy.topNews : [];
-          news.forEach(function (n, i) {
-            var internal = map.stories && map.stories[n.url];
-            var li = newsEl.children[i];
-            if (!internal || !li) return;
-            var a = document.createElement('a');
-            a.href = encodeURI(internal);
-            a.textContent = 'our take →';
-            a.setAttribute('style', linkStyle);
-            li.appendChild(a);
-          });
-          if (map.kindness) {
-            var t = taskEl.textContent;
-            var ka = document.createElement('a');
-            ka.href = encodeURI(map.kindness);
-            ka.textContent = t;
-            ka.style.color = 'inherit';
-            taskEl.textContent = '';
-            taskEl.appendChild(ka);
-          }
-        } catch (e) { /* leave external links as-is */ }
       }
 
       try {
@@ -657,7 +695,7 @@
             }
           } catch (e) { data = null; }
           if (data) {
-            render(data);
+            render(data, archiveDate);
           } else {
             renderArchiveMiss(archiveDate);
           }
@@ -665,12 +703,19 @@
           var res = await fetch('/joy.json', { cache: 'no-cache' });
           if (!res.ok) throw new Error('status ' + res.status);
           var joy = await res.json();
-          render(joy);
-          addLibraryLinks(joy);
+          // Corrupt root: never-blank miss path (do not invent copy).
+          if (!isNewShape(joy) && !isOldShape(joy)) {
+            renderNeither();
+          } else {
+            render(joy, laTodayIso());
+          }
         }
       } catch (err) {
         taskEl.textContent = fallbackTask;
+        shareLine = fallbackTask;
+        clearWorld();
         newsEl.innerHTML = '<li class="empty">More good news on the way — check back soon.</li>';
+        if (worldEl) worldEl.classList.remove('is-empty');
       }
 
       // Surface the "← today" affordance only when viewing an archive day.
@@ -679,7 +724,7 @@
       }
 
       sendBtn.addEventListener('click', async function () {
-        var line = (taskEl.textContent || fallbackTask).trim();
+        var line = (shareLine || taskEl.textContent || fallbackTask).trim();
         var text = "Today's kindness from Get Happy: " + line;
         var shareMessage = text + ' ' + shareUrl;
         try {

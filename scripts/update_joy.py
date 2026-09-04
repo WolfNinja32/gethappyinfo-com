@@ -1,17 +1,20 @@
 #!/usr/bin/env python3
-"""gethappyinfo.com daily updater — stdlib only, no LLM, no external deps.
+"""gethappyinfo.com daily updater — postcard pipeline v4 (stdlib only).
 
-Pulls Good News Network's RSS feed, filters/dedups, and writes public/joy.json
-with a date-seeded micro-joy task plus a few good-news headlines.
+Writes public/joy.json as {date, line, paragraph, optional seed}. Research may
+return one GNN seed; writer + grounding (Workers AI) produce a matching
+paragraph. Matching-card degrade: on writer/grounding fail, reuse yesterday's
+line+paragraph+seed unit and only advance date. Site never blanks.
 
-Design invariants (see plan):
-  * No paid/external compute and no third-party packages — urllib + xml.etree.
-  * Fail-closed safety filter (a denylist match is dropped, never kept on doubt).
-  * Cross-day dedup via data/recent.json so feed-top headlines that linger for
-    days don't show twice.
-  * Degrade-safe: the daily task always rotates; headlines carry over from the
-    last good run when the fetch fails or yields nothing new. The site never
-    blanks.
+Design invariants:
+  * No third-party packages — urllib + xml.etree.
+  * Denylist filters research titles/feeds ONLY (never written paragraphs).
+  * Cross-day URL dedup via data/recent.json (14 days).
+  * Pacific edition date America/Los_Angeles.
+  * AI optional: missing CLOUDFLARE_API_TOKEN or CLOUDFLARE_ACCOUNT_ID → degrade
+    path, Actions stay green, conspicuous warning log.
+  * V3 /story and /kindness generation is STOPPED (files left; see breadcrumb
+    in main). Do not revive without a new product decision.
 """
 from __future__ import annotations
 
@@ -47,6 +50,7 @@ ARCHIVE_FILE = ROOT / "public" / "joy-archive.json"
 
 # --- V3 content library (per-story + per-kindness pages, SEO, agent feed) ---
 VOICE_FILE = ROOT / "scripts" / "voice.md"
+VOICE_FALLBACK_FILE = ROOT / "scripts" / "voice-fallback.md"
 STORY_DIR = ROOT / "public" / "story"
 KINDNESS_DIR = ROOT / "public" / "kindness"
 SITEMAP_FILE = ROOT / "public" / "sitemap.xml"
@@ -61,8 +65,8 @@ GEN_LOG_FILE = ROOT / "data" / "generation-log.json"
 # Writer is Kimi K2.6 with reasoning DISABLED (thinking:false): a model bake-off showed
 # reasoning-on is slow, costly, and frequently returns no output, while reasoning-off is
 # fast, reliable, and on-voice. Creds live only in env — CLOUDFLARE_API_TOKEN (a GitHub
-# secret, needs Workers AI:Read) + CLOUDFLARE_ACCOUNT_ID — both set in CI. With no token,
-# story-page generation is skipped entirely; the daily postcard never depends on it.
+# secret, needs Workers AI:Read) + CLOUDFLARE_ACCOUNT_ID (public; hardcoded in daily.yml).
+# Missing token → degrade; the daily postcard never blanks.
 WORKERS_AI_ACCOUNT = os.environ.get("CLOUDFLARE_ACCOUNT_ID", "")
 WORKERS_AI_URL = "https://api.cloudflare.com/client/v4/accounts/{account}/ai/run/{model}"
 WRITER_MODEL = "@cf/moonshotai/kimi-k2.6"
@@ -105,8 +109,12 @@ FEEDS = [
 # Fail-closed denylist. A positive-news source rarely trips these, but when a
 # title carries a grim or off-brand term we drop it rather than risk it. Word
 # boundaries keep "war" from matching "warm" / "dead" from "deadline".
+# Denylist scope: research TITLES / feed items ONLY. Never strip words from a
+# written paragraph. Memorial-adjacent hard-truth vocabulary (died/death/dead)
+# is allowed in titles when the item is otherwise a clean kindness deed — voice
+# permits hard truth next to joy. Violence / abuse / disaster terms still drop.
 DENY_TERMS = [
-    "kill", "killed", "dead", "death", "died", "dies", "dying", "fatal",
+    "kill", "killed", "fatal",
     "murder", "homicide", "shooting", "shot", "gun", "stab", "assault",
     "attack", "war", "bomb", "explosion", "terror", "terrorist", "hostage",
     "kidnap", "rape", "abuse", "suicide", "overdose", "crash", "disaster",
@@ -834,76 +842,234 @@ def build_kindness_batch() -> int:
     return rendered
 
 
-def main(force: bool = False) -> int:
-    date = today_pt()
-    task = pick_task(date)
-    existing = load_json(JOY_FILE, default=None)
 
-    # Idempotency guard. This updater is fired by a reliable Cloudflare cron AND a
-    # later GitHub-cron backup (see .github/workflows/daily.yml). When today's
-    # postcard is already complete, the second trigger must be a no-op — otherwise
-    # it could re-pick newer stories and reshuffle a set the first run published.
-    # Bail before the network fetch. `--force` overrides for deliberate same-day
-    # regeneration.
-    if (not force and existing
-            and existing.get("lastUpdated") == date.isoformat()
-            and isinstance(existing.get("topNews"), list)
-            and len(existing["topNews"]) >= NUM_HEADLINES):
-        print(f"[update_joy] {date.isoformat()} already current "
-              f"({len(existing['topNews'])} stories) — nothing to do "
-              "(use --force to override)")
-        return 0
+# ===========================================================================
+# Postcard pipeline v4 — line + paragraph (+ optional seed)
+# ===========================================================================
 
-    by_topic = fetch_all(FEEDS)
+def is_new_shape(card) -> bool:
+    """New-shape iff non-empty line AND non-empty paragraph (not date alone)."""
+    if not isinstance(card, dict):
+        return False
+    line = card.get("line")
+    paragraph = card.get("paragraph")
+    return (
+        isinstance(line, str) and bool(line.strip())
+        and isinstance(paragraph, str) and bool(paragraph.strip())
+    )
 
-    recent = prune_recent(load_json(RECENT_FILE, default=[]), date)
-    recent_urls = {e["url"] for e in recent}
-    picks = select(by_topic, recent_urls, date, FEEDS)
 
-    # Record fresh picks (already denylist-filtered by select()) in recent.json.
-    if picks:
-        for p in picks:
-            recent.append({"url": p["url"], "date": date.isoformat()})
-        RECENT_FILE.write_text(json.dumps(recent, indent=2) + "\n", encoding="utf-8")
-        print(f"[update_joy] {len(picks)} fresh headline(s); recent.json now {len(recent)} urls")
+def is_old_shape(card) -> bool:
+    if is_new_shape(card):
+        return False
+    if not isinstance(card, dict):
+        return False
+    return bool(card.get("lastUpdated") or card.get("dailyTask"))
 
-    # Assemble the published set — fail-closed AND degrade-safe: fresh picks
-    # first, then top up from the last good set so a thin fetch never shrinks or
-    # blanks the site. Carryover items are denylist-filtered (so a story that was
-    # fine under an older/looser denylist can't linger once the denylist grows)
-    # and deduped by URL. The result is the most CLEAN items available, up to 3.
-    news = list(picks)
-    if len(news) < NUM_HEADLINES and existing and isinstance(existing.get("topNews"), list):
-        # Dedup on canon()'d URLs both sides — fresh URLs are already canonical,
-        # but carryover may predate canon() or differ by slash/query, so compare
-        # like-for-like to avoid the same story appearing twice.
-        have = {canon(n.get("url", "")) for n in news}
-        carried = 0
-        for n in existing["topNews"]:
-            if len(news) >= NUM_HEADLINES:
-                break
-            cu = canon(n.get("url", ""))
-            if cu in have or is_denylisted(n.get("text", "")):
+
+def actions_warning(msg: str) -> None:
+    """Conspicuous degrade log — GitHub Actions warning annotation + stderr."""
+    print(f"::warning::[update_joy] {msg}")
+    print(f"[update_joy] WARNING: {msg}", file=sys.stderr)
+
+
+def escape_md_line(line: str) -> str:
+    """Escape markdown-significant chars from tasks.txt before {{LINE}} sub."""
+    out = []
+    for ch in line:
+        if ch in "*_`[]":
+            out.append("\\" + ch)
+        else:
+            out.append(ch)
+    return "".join(out)
+
+
+def render_voice_fallback(line: str) -> str:
+    """Substitute {{LINE}} in scripts/voice-fallback.md; return paragraph body.
+
+    The published paragraph must include today's line as the concrete deed.
+    Not model output. Invents no seed.
+    """
+    raw = VOICE_FALLBACK_FILE.read_text(encoding="utf-8")
+    # Drop markdown preamble above the first horizontal rule; keep craft body.
+    if "\n---\n" in raw:
+        body = raw.split("\n---\n", 1)[1].strip()
+    else:
+        body = raw.strip()
+    # Skip leading blank / heading-only leftovers
+    paragraphs = [p.strip() for p in re.split(r"\n\s*\n", body) if p.strip()]
+    # Prefer the chunk that contains the slot; else last chunk.
+    chosen = next((p for p in paragraphs if "{{LINE}}" in p), paragraphs[-1] if paragraphs else body)
+    # If the chosen chunk still starts with a markdown heading, strip heading lines.
+    lines_out = []
+    for ln in chosen.splitlines():
+        if ln.lstrip().startswith("#"):
+            continue
+        lines_out.append(ln)
+    tmpl = " ".join(x.strip() for x in lines_out if x.strip())
+    return tmpl.replace("{{LINE}}", escape_md_line(line)).strip()
+
+
+def pick_seed(by_topic: dict[str, list[dict]], recent_urls: set[str],
+              date) -> dict | None:
+    """Pick ONE research seed {summary, sourceUrl, sourceTitle} or None.
+
+    Prefer inspiring, then animals, then other topic feeds. Denylist is
+    title-scoped only. 14-day URL dedup via recent_urls. A miss is allowed.
+    """
+    topic_order = ["inspiring", "animals", "health", "earth", "science"]
+    # Also include any unexpected topics last
+    for t in by_topic:
+        if t not in topic_order:
+            topic_order.append(t)
+
+    for topic in topic_order:
+        for it in by_topic.get(topic, []):
+            url = it.get("url", "")
+            title = it.get("text", "")
+            if not url or not title:
                 continue
-            news.append(n)
-            have.add(cu)
-            carried += 1
-        if carried:
-            print(f"[update_joy] topped up with {carried} filtered item(s) from last set")
-    if not news:
-        print("[update_joy] no clean headlines available — writing task only", file=sys.stderr)
+            if url in recent_urls:
+                continue
+            # Title/feed denylist only — do not inspect excerpt for deny terms
+            # beyond what's needed for a clean headline gate.
+            if is_denylisted(title):
+                continue
+            excerpt = (it.get("excerpt") or "").strip()
+            summary = excerpt or title
+            # Keep summary plain and short
+            if len(summary) > 400:
+                summary = summary[:397].rstrip() + "…"
+            return {
+                "summary": summary,
+                "sourceUrl": url,
+                "sourceTitle": title,
+            }
+    return None
 
-    joy = {"lastUpdated": date.isoformat(), "dailyTask": task, "topNews": news}
-    JOY_FILE.write_text(json.dumps(joy, indent=2) + "\n", encoding="utf-8")
-    print(f"[update_joy] wrote {JOY_FILE.relative_to(ROOT)} — task seeded for {date.isoformat()}")
 
-    # Append today to the public archive (keyed by ISO date so client-side
-    # per-day routes — /YYYY-MM-DD — can resolve old postcards). Object keyed
-    # by date sorts chronologically when serialized with sort_keys=True.
-    # Fail closed: a fresh archive is fine, but if the file exists and won't
-    # parse (or has the wrong shape) we must NOT overwrite it — doing so would
-    # replace all prior days with today alone. Abort instead so a failed run
-    # surfaces it rather than silently truncating history.
+def workers_ai_configured() -> bool:
+    token = os.environ.get("CLOUDFLARE_API_TOKEN") or ""
+    return bool(token.strip() and (WORKERS_AI_ACCOUNT or "").strip())
+
+
+def write_postcard_paragraph(line: str, seed: dict | None) -> str | None:
+    """Writer mode: return paragraph text or None on failure.
+
+    GHI_LLM=off yields a deterministic offline paragraph for tests.
+    """
+    if os.environ.get("GHI_LLM") == "off":
+        if seed:
+            return (
+                f"Here is what landed today. {seed.get('summary', '').strip()} "
+                f"It pairs with a small ask: {line} That was enough for one card."
+            )
+        return (
+            f"Someone meant to skip it and did it anyway. {line} "
+            "It took almost nothing. The day shifted half a degree. "
+            "They went on lighter for having refused to wait."
+        )
+    if not workers_ai_configured():
+        raise RuntimeError("CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID not set")
+
+    if seed:
+        seed_block = (
+            "SEED (use ONLY these facts; invent nothing beyond them):\n"
+            f"- summary: {seed.get('summary', '')}\n"
+            f"- sourceTitle: {seed.get('sourceTitle', '')}\n"
+            f"- sourceUrl: {seed.get('sourceUrl', '')}"
+        )
+    else:
+        seed_block = (
+            "No SEED today (research miss). Write an imagined scene from the "
+            "line only — invent no real biography, public figure, org, news event, "
+            "or source URL."
+        )
+    prompt = (
+        load_prompt("POSTCARD PROMPT")
+        .replace("{{LINE}}", line)
+        .replace("{{SEED_BLOCK}}", seed_block)
+    )
+    raw = call_workers_ai(prompt, model=WRITER_MODEL, params=WRITER_PARAMS)
+    obj = parse_json_reply(raw)
+    para = (obj.get("paragraph") or "").strip()
+    if not para:
+        raise ValueError("postcard reply missing paragraph")
+    return para
+
+
+def review_postcard(paragraph: str, *, line: str, seed: dict | None) -> dict:
+    """Two-mode grounding. Seeded vs no-seed use different prompts — never one for both."""
+    if os.environ.get("GHI_LLM") == "off":
+        # Deterministic offline gate used by tests (can be monkeypatched).
+        return {"ok": True, "reason": "llm-off"}
+    if not workers_ai_configured():
+        raise RuntimeError("CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID not set")
+
+    if seed:
+        prompt = (
+            load_prompt("POSTCARD REVIEW SEEDED")
+            .replace("{{SUMMARY}}", seed.get("summary", ""))
+            .replace("{{SOURCE_TITLE}}", seed.get("sourceTitle", ""))
+            .replace("{{PARAGRAPH}}", paragraph)
+        )
+    else:
+        prompt = (
+            load_prompt("POSTCARD REVIEW NOSEED")
+            .replace("{{LINE}}", line)
+            .replace("{{PARAGRAPH}}", paragraph)
+        )
+    raw = call_workers_ai(prompt, model=REVIEW_MODEL)
+    obj = parse_json_reply(raw)
+    return {"ok": bool(obj.get("ok", False)), "reason": str(obj.get("reason", ""))}
+
+
+def find_last_good_card(existing, archive: dict) -> dict | None:
+    """Most recent new-shape card (matching line+paragraph[+seed] unit)."""
+    if is_new_shape(existing):
+        return existing
+    days = archive.get("days") if isinstance(archive, dict) else None
+    if not isinstance(days, dict):
+        return None
+    for key in sorted(days.keys(), reverse=True):
+        card = days[key]
+        if is_new_shape(card):
+            return card
+    return None
+
+
+def card_unit(card: dict, date_iso: str) -> dict:
+    """Build published new-shape card; copy seed only when present and complete."""
+    out = {
+        "date": date_iso,
+        "line": card["line"],
+        "paragraph": card["paragraph"],
+    }
+    seed = card.get("seed")
+    if isinstance(seed, dict):
+        summary = (seed.get("summary") or "").strip()
+        url = (seed.get("sourceUrl") or "").strip()
+        title = (seed.get("sourceTitle") or "").strip()
+        if summary and url and title:
+            out["seed"] = {
+                "summary": summary,
+                "sourceUrl": url,
+                "sourceTitle": title,
+            }
+    return out
+
+
+def write_archive_day(archive: dict, date_iso: str, joy: dict) -> dict:
+    archive.setdefault("days", {})
+    archive["days"][date_iso] = joy
+    ARCHIVE_FILE.write_text(
+        json.dumps(archive, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    return archive
+
+
+def load_archive_or_abort() -> tuple[dict, int | None]:
+    """Return (archive, error_rc). error_rc is 1 if corrupt existing file."""
     if ARCHIVE_FILE.exists():
         try:
             archive = json.loads(ARCHIVE_FILE.read_text(encoding="utf-8"))
@@ -913,39 +1079,125 @@ def main(force: bool = False) -> int:
                 f"({exc}); refusing to overwrite and lose history",
                 file=sys.stderr,
             )
-            return 1
+            return {}, 1
         if not isinstance(archive, dict) or not isinstance(archive.get("days"), dict):
             print(
                 f"[update_joy] ERROR: {ARCHIVE_FILE.relative_to(ROOT)} has an "
                 "unexpected shape; refusing to overwrite and lose history",
                 file=sys.stderr,
             )
-            return 1
+            return {}, 1
+        return archive, None
+    return {"days": {}}, None
+
+
+def main(force: bool = False) -> int:
+    date = today_pt()
+    date_iso = date.isoformat()
+    line = pick_task(date)
+    existing = load_json(JOY_FILE, default=None)
+
+    # Idempotency: if today's new-shape card is already written, no-op
+    # (Cloudflare cron + GH backup). --force overrides.
+    if (not force and is_new_shape(existing)
+            and existing.get("date") == date_iso):
+        print(f"[update_joy] {date_iso} already current (new-shape) — nothing to do "
+              "(use --force to override)")
+        return 0
+
+    archive, arch_err = load_archive_or_abort()
+    if arch_err:
+        return arch_err
+
+    # --- Research (one seed; miss allowed) ---------------------------------
+    by_topic = fetch_all(FEEDS)
+    recent = prune_recent(load_json(RECENT_FILE, default=[]), date)
+    recent_urls = {e["url"] for e in recent if isinstance(e, dict) and "url" in e}
+    seed = pick_seed(by_topic, recent_urls, date)
+    if seed:
+        recent.append({"url": seed["sourceUrl"], "date": date_iso})
+        RECENT_FILE.write_text(json.dumps(recent, indent=2) + "\n", encoding="utf-8")
+        print(f"[update_joy] research seed: {seed['sourceTitle'][:80]!r}")
     else:
-        archive = {"days": {}}
-    archive["days"][date.isoformat()] = joy
-    ARCHIVE_FILE.write_text(
-        json.dumps(archive, indent=2, sort_keys=True) + "\n", encoding="utf-8"
-    )
+        print("[update_joy] research miss — continuing with today's line only (no seed)")
+
+    # --- Writer + grounding (optional AI) ----------------------------------
+    paragraph = None
+    used_seed = seed
+    degrade_reason = None
+
+    if not workers_ai_configured() and os.environ.get("GHI_LLM") != "off":
+        actions_warning(
+            "CLOUDFLARE_API_TOKEN or CLOUDFLARE_ACCOUNT_ID missing — "
+            "skipping writer; taking degrade path (postcard still ships)"
+        )
+        degrade_reason = "missing-cloudflare-creds"
+    else:
+        try:
+            draft = write_postcard_paragraph(line, seed)
+            if not draft:
+                degrade_reason = "writer-empty"
+            else:
+                verdict = review_postcard(draft, line=line, seed=seed)
+                if not verdict.get("ok"):
+                    degrade_reason = f"grounding:{verdict.get('reason', '')[:80]}"
+                    actions_warning(
+                        f"grounding rejected draft ({verdict.get('reason', '')}); "
+                        "will reuse last-good or fallback"
+                    )
+                else:
+                    paragraph = draft
+        except Exception as exc:
+            degrade_reason = f"writer-error:{type(exc).__name__}"
+            actions_warning(
+                f"writer/grounding failed ({type(exc).__name__}: {exc}); "
+                "will reuse last-good or fallback"
+            )
+
+    joy = None
+    if paragraph:
+        joy = {"date": date_iso, "line": line, "paragraph": paragraph}
+        if used_seed:
+            joy["seed"] = used_seed
+        print(f"[update_joy] wrote new matching card for {date_iso}")
+    else:
+        last = find_last_good_card(existing, archive)
+        if last:
+            joy = card_unit(last, date_iso)
+            actions_warning(
+                f"reuse last-good matching card (reason={degrade_reason or 'unknown'}); "
+                f"date advanced to {date_iso}; line+paragraph+seed reused as a unit — "
+                "share text will repeat intentionally"
+            )
+        else:
+            # First-run / wipe / only old-shape history
+            fb = render_voice_fallback(line)
+            joy = {"date": date_iso, "line": line, "paragraph": fb}
+            actions_warning(
+                f"first-run / no last-good new-shape card (reason={degrade_reason or 'no-history'}); "
+                f"using voice-fallback.md for line={line[:60]!r}"
+            )
+
+    # Never publish topNews / dailyTask / ps on new days
+    for banned in ("topNews", "dailyTask", "ps", "lastUpdated"):
+        joy.pop(banned, None)
+
+    JOY_FILE.write_text(json.dumps(joy, indent=2) + "\n", encoding="utf-8")
+    print(f"[update_joy] wrote {JOY_FILE.relative_to(ROOT)} — {date_iso}")
+
+    write_archive_day(archive, date_iso, joy)
     print(f"[update_joy] archive: {len(archive['days'])} day(s) total")
 
-    # ---- V3: per-story pages + cumulative SEO/agent plumbing (best-effort) ----
-    # Strictly AFTER the joy.json + archive writes above, and fully wrapped: nothing
-    # here can blank, reshuffle, or fail the daily postcard. Only FRESH picks get
-    # pages (carryover items already have one from their first day — generate-once).
+    # ---- V3 story/kindness generation STOPPED (postcard pipeline v4) ----
+    # Leave existing public/story and public/kindness files in place. Do NOT
+    # call generate_story_pages / build_kindness_batch / write_today_pages from
+    # the daily path. A later reader must not "fix" generation back on without
+    # a new product decision — the live postcard no longer depends on V3 pages.
+    # (Helpers remain in this file for offline tests and one-shot --build-kindness.)
     try:
-        llm_off = os.environ.get("GHI_LLM") == "off"
-        story_map: dict[str, str] = {}
-        if picks and ((os.environ.get("CLOUDFLARE_API_TOKEN") and WORKERS_AI_ACCOUNT) or llm_off):
-            story_map = generate_story_pages(picks, date)
-            print(f"[update_joy] story pages: {len(story_map)} linked")
-        elif picks:
-            print("[update_joy] no CLOUDFLARE_API_TOKEN — story-page generation skipped "
-                  "(postcard unaffected)")
-        write_today_pages(date, story_map, task)
         regenerate_plumbing(date)
-    except Exception as exc:  # never let page-gen affect the daily run
-        print(f"[update_joy] V3 page generation error (postcard unaffected): {exc}",
+    except Exception as exc:
+        print(f"[update_joy] plumbing refresh error (postcard unaffected): {exc}",
               file=sys.stderr)
     return 0
 
@@ -953,5 +1205,6 @@ def main(force: bool = False) -> int:
 if __name__ == "__main__":
     args = sys.argv[1:]
     if "--build-kindness" in args:
+        # Manual one-shot only; not part of the daily postcard path (v4).
         sys.exit(0 if build_kindness_batch() >= 0 else 1)
     sys.exit(main(force="--force" in args))
