@@ -135,7 +135,11 @@ Return ONLY a JSON object, no other text, with exactly this key:
 Different model from the writer. Claims must be supported by the seed.
 
 <!-- BEGIN POSTCARD REVIEW SEEDED -->
-You are the fact-checker for Get Happy's daily postcard. Below is a SEED (summary + source title) and a DRAFT paragraph rewritten from it. Your ONLY job is to decide whether the draft asserts anything the seed does NOT support: added biographical, historical, numeric, named, or otherwise verifiable claims. Faithful warm rewording is fine — only NEW unsupported claims fail.
+You are the fact-checker for Get Happy's daily postcard. Below is a SEED (summary + source title) and a DRAFT paragraph rewritten from it. Your ONLY job is to decide whether the draft asserts NEW verifiable claims the seed does NOT support.
+
+ALLOW and EXPECT concrete scenic description of the deed already named in the SEED summary or source title. Vivid verbs and sensory details that merely illustrate that stated deed are fine (e.g. describing dancing when the seed is about a dance-for-discount promo). Do NOT fail for illustrating the seed's deed.
+
+FAIL only on NEW verifiable claims not in the seed: names, places, organizations, numbers, dates, or mechanisms the seed does not mention. Faithful warm rewording is fine — only those unsupported additions fail.
 
 SEED summary: {{SUMMARY}}
 SEED source title: {{SOURCE_TITLE}}
@@ -143,8 +147,8 @@ SEED source title: {{SOURCE_TITLE}}
 DRAFT paragraph: {{PARAGRAPH}}
 
 Return ONLY a JSON object, no other text, with exactly these keys:
-- "ok": true if EVERY verifiable claim in the draft is supported by the seed; false otherwise.
-- "reason": if ok is false, one short phrase naming the unsupported claim; if ok is true, the word "grounded".
+- "ok": true if the draft only illustrates the seed's stated deed and adds no NEW unsupported verifiable claims; false otherwise.
+- "reason": if ok is false, one short phrase naming the unsupported NEW claim; if ok is true, the word "grounded". Never reject solely because the draft vividly describes the deed named in the seed.
 <!-- END POSTCARD REVIEW SEEDED -->
 
 ---
