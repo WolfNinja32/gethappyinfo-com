@@ -402,7 +402,7 @@
     }
     .seed-credit {
       font-family: 'IBM Plex Mono', monospace;
-      font-size: 0.68rem;
+      font-size: 0.6rem;
       letter-spacing: 0.04em;
       color: var(--ink-soft);
       margin: 0.5rem 0 0;
@@ -411,6 +411,8 @@
       color: var(--postal-red);
       text-decoration: underline;
       text-underline-offset: 2px;
+      padding: 0.35em 0.15em;
+      margin: -0.35em -0.15em;
     }
     .world.is-empty .section-label { display: none; }
 
@@ -627,7 +629,7 @@
         var credit = '';
         var seed = data.seed;
         if (seed && seed.sourceTitle && seed.sourceUrl && safeUrl(seed.sourceUrl) !== '#') {
-          credit = '<p class="seed-credit">Source: <a href="' + safeUrl(seed.sourceUrl)
+          credit = '<p class="seed-credit">Story source <a href="' + safeUrl(seed.sourceUrl)
             + '" target="_blank" rel="noopener noreferrer">'
             + escapeHtml(seed.sourceTitle) + '</a></p>';
         }

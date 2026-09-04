@@ -843,23 +843,42 @@ def write_robots() -> None:
 
 
 def write_llms_txt() -> None:
-    """llmstxt.org format: H1 + blockquote summary + linked sections."""
+    """llmstxt.org format for the LIVE postcard product (v4).
+
+    Points agents at joy.json + human URLs. Does not list empty V3
+    Stories/Kindness library sections (generation stopped).
+    """
+    shape = "`{date, line, paragraph, optional seed}`"
     lines = [
         "# Get Happy",
         "",
-        "> A daily postcard of good news and small kindnesses from gethappyinfo.com — "
-        "original, warm summaries of genuinely uplifting stories, plus an evergreen "
-        "library of small kind things to try. No tracking, no signup.",
+        "> A daily postcard of good news from gethappyinfo.com — one kindness "
+        "line, one warm paragraph, and an optional story seed with source "
+        "credit. No tracking, no signup.",
         "",
-        "## Stories",
+        "The live product is a single daily postcard (Pacific date). Humans "
+        "and agents get the same artifact.",
         "",
+        "## Daily postcard",
+        "",
+        f"- [joy.json]({SITE_URL}/joy.json): Canonical structured daily card "
+        f"— {shape} (seed has `summary`, `sourceUrl`, `sourceTitle` when present)",
+        f"- [Today's postcard]({SITE_URL}/): Human view of the same card",
+        f"- Dated URLs: `{SITE_URL}/YYYY-MM-DD` — permalink for that Pacific "
+        "day's postcard (archive lookup)",
+        "",
+        "## Share",
+        "",
+        "The site's share button passes on the kindness `line` with a dated "
+        "postcard URL (`/YYYY-MM-DD`), never the bare homepage.",
+        "",
+        "## Note",
+        "",
+        "V3 per-story (`/story/…`) and kindness-library (`/kindness/…`) "
+        "generation is stopped. Do not treat empty Stories/Kindness lists, "
+        "`index.json`, or `today-pages.json` as the live product — use "
+        "`joy.json` instead.",
     ]
-    for m in iter_page_meta(STORY_DIR):
-        why = f": {m['summary']}" if m["summary"] else ""
-        lines.append(f"- [{m['headline']}]({m['url']}){why}")
-    lines += ["", "## Kindness", ""]
-    for m in iter_page_meta(KINDNESS_DIR):
-        lines.append(f"- [{m['headline']}]({m['url']})")
     LLMS_FILE.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
