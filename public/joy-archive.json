@@ -2595,7 +2595,12 @@
     "2026-09-04": {
       "date": "2026-09-04",
       "line": "Send a voice message instead of a text \u2014 let them hear you smile.",
-      "paragraph": "Someone meant to do it later and did it today instead. Send a voice message instead of a text \u2014 let them hear you smile. It took almost nothing \u2014 a minute, a look, a small reach across an ordinary day. Nobody asked for a speech. The room, or the street, or the quiet between two people, shifted half a degree warmer. That was enough. They went on with whatever came next, lighter for having refused to skip it."
+      "paragraph": "Maja Kristin learned that her schools in Marin County sat at the bottom for state funding. She asked the Ross Valley School District to gather one hundred teachers from their K-8 schools. She told the district to give the teachers one thing she never had: a night off from lesson plans. She gave one million dollars in bonuses. The teachers wept in the gym. Some paid off cars. Others sat down for the first time in months.",
+      "seed": {
+        "sourceTitle": "Woman Gives $1 Million in \u2018Life-Changing\u2019 Bonuses to Teachers in Her School District",
+        "sourceUrl": "https://www.goodnewsnetwork.org/woman-gives-1-million-in-life-changing-bonuses-to-teachers-in-her-school-district",
+        "summary": "When a local resident found out that her schools in an extremely wealthy Northern California county was at the bottom for state funding, she stepped up to make the difference. Maja Kristin asked the Ross Valley School District to organize a meeting of 100 teachers from their K-8 schools, with the special instruction that they"
+      }
     }
   }
 }
