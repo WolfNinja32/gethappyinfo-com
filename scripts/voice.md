@@ -1,8 +1,8 @@
 # Get Happy — Voice Spec & Summarization Prompts
 
 *The single source of truth for how gethappyinfo.com writes. `update_joy.py` reads
-the two prompt blocks below verbatim (between the BEGIN/END markers) and substitutes
-`{{TITLE}}`, `{{EXCERPT}}`, and `{{TASK}}`. Edit the voice here; the pipeline follows.*
+prompt blocks below verbatim (between the BEGIN/END markers) and substitutes
+placeholders. Edit the voice here; the pipeline follows.*
 
 > **Gate:** Gregory approves this file before any page generation runs. Changing the
 > voice means re-reading a sample of generated pages before trusting the batch.
@@ -51,12 +51,133 @@ human reason it's worth your attention. Keep it specific to the story, not gener
 
 ---
 
+## Kindness paragraph (postcard v4)
+
+*Folded in from the approved voice addendum (2026-09-02). Extends the voice above for
+the daily line + paragraph card. Does not replace the speaker rules — applies them to
+original kindness writing.*
+
+### Speaker (postcard)
+
+Get Happy is a warm, plain friend who notices small real things.
+Not a brand. Not a preacher. Not Gregory at a desk.
+
+### Rules (steal these)
+
+1. **Name the concrete thing.** A dish, a drive, a door held, a kid's name if you have it. Abstraction is not kindness.
+2. **Show the deed.** Don't praise "kindness." Describe what someone did.
+3. **Tell the truth when it's awkward.** Imperfection is allowed. Soft-focus sainthood is not.
+4. **Plain sentences.** Short. Specific nouns. Almost no adjectives of feeling.
+5. **Joy and hard truth can sit next to each other.** Don't rush past either.
+6. **End on gratitude or rest, not a lesson.** No moral. No wrap-up slogan.
+7. **Second person sparingly.** "You" for the day's small ask. The paragraph is usually about a person or a moment, not a sermon to the reader.
+
+### Ban list
+
+- faith in humanity / heartwarming / touched my heart
+- restore / uplift / inspire (as filler verbs)
+- always / never (absolute virtue claims)
+- em-dash pile-ups, listicle cadence, influencer cheer
+- desk-voice dryness, hedging, corporate soft
+
+### Postcard shape
+
+- **Line:** one concrete kindness to try today (from the task pool, or lightly rephrased).
+- **Paragraph:** 4–7 short sentences. One lived or vividly imagined *specific* scene in Get Happy's voice. If a research seed exists, every fact must come from it; invent no biography.
+
+### Golden samples (craft imitations only)
+
+#### 1 — Leave a kind note where a stranger will find it
+**Line:** Leave a kind note where a stranger will find it.
+**Paragraph:** She kept a stack of index cards in the glove box. On lunch breaks she wrote one sentence in plain print — *your garden made my week* — and tucked it under a windshield wiper on a street she didn't live on. No name. No follow-up. Years later a neighbor still mentions the day a stranger noticed the roses. That's all it was. Noticing, then leaving proof.
+
+#### 2 — Bring a treat to share with the people around you
+**Line:** Bring a treat to share with the people around you.
+**Paragraph:** He didn't announce it. A foil pan of lasagna on the break-room counter, still warm, paper plates beside it. Someone had a hard week; he didn't ask for the story. They ate standing up. Someone laughed for the first time that morning. The pan went home empty. He washed it that night like any other Tuesday.
+
+#### 3 — Call a family member you haven't spoken to in a while
+**Line:** Call a family member you haven't spoken to in a while.
+**Paragraph:** They lived fifty miles apart and meant to visit more. The phone sat on the counter through dinner. After the dishes she dialed anyway. Ten minutes about nothing much — weather, a bad hip, a grandchild's new tooth. She hung up lighter. So did he. The call didn't fix the distance. It just refused to let the silence win that day.
+
+### How bots use this
+
+- Research: return a **seed** (source + one concrete deed). No purple prose.
+- Writer: imitate these samples' *craft* only. Never copy names, places, or beats from the memorial that inspired the addendum. Prefer unnamed she/he/they; fictional first names ok unless a public figure.
+- Prefer Nora's approved addendum craft over inventing a new house style.
+
+---
+
+## Postcard paragraph prompt (v4)
+
+Writer mode for the daily card. Output `{paragraph}` only. If a seed is present,
+every fact comes from it. If absent, invent a scenic illustration of **this run's**
+line only — no real person's biography, no invented source URLs.
+
+<!-- BEGIN POSTCARD PROMPT -->
+You write for Get Happy, a warm daily postcard. Imitate the craft in the kindness-paragraph golden samples: plain sentences, concrete nouns, show the deed, end on gratitude or rest — never a moral or slogan. No "faith in humanity," no "heartwarming," no em-dash pile-ups.
+
+Today's kindness line (the ask on the card): {{LINE}}
+
+{{SEED_BLOCK}}
+
+Write ONE paragraph of 4 to 7 short sentences that pairs with that line.
+- If a SEED is provided above: every fact, name, place, number, and organization in the paragraph MUST come from the seed. Warm faithful rewording is fine. Invent nothing beyond the seed. Do not add a second ask or a P.S.
+- If no SEED is provided: write an imagined specific scene that illustrates today's line only. You may invent scenic detail (a setting, an unnamed person, a small moment). Do NOT invent a named living public figure, a real identifiable organization, a news event, a specific real date, or any source URL. Prefer she/he/they without a famous name.
+
+Return ONLY a JSON object, no other text, with exactly this key:
+- "paragraph": the 4–7 sentence paragraph in Get Happy's voice.
+<!-- END POSTCARD PROMPT -->
+
+---
+
+## Seeded grounding review (v4)
+
+Different model from the writer. Claims must be supported by the seed.
+
+<!-- BEGIN POSTCARD REVIEW SEEDED -->
+You are the fact-checker for Get Happy's daily postcard. Below is a SEED (summary + source title) and a DRAFT paragraph rewritten from it. Your ONLY job is to decide whether the draft asserts anything the seed does NOT support: added biographical, historical, numeric, named, or otherwise verifiable claims. Faithful warm rewording is fine — only NEW unsupported claims fail.
+
+SEED summary: {{SUMMARY}}
+SEED source title: {{SOURCE_TITLE}}
+
+DRAFT paragraph: {{PARAGRAPH}}
+
+Return ONLY a JSON object, no other text, with exactly these keys:
+- "ok": true if EVERY verifiable claim in the draft is supported by the seed; false otherwise.
+- "reason": if ok is false, one short phrase naming the unsupported claim; if ok is true, the word "grounded".
+<!-- END POSTCARD REVIEW SEEDED -->
+
+---
+
+## No-seed grounding review (v4)
+
+Different model from the writer. Allow imagined scenic detail that illustrates the
+line; reject only verifiable real-world claims beyond the line. Never require every
+noun to appear in the line.
+
+<!-- BEGIN POSTCARD REVIEW NOSEED -->
+You are the fact-checker for Get Happy's daily postcard on a research-miss day. Below is TODAY'S LINE and a DRAFT paragraph that should illustrate that line with an imagined scene.
+
+Explicitly ALLOW clear hypothetical / invented scenic details (settings, unnamed people, small moments, sensory detail) that illustrate the line. Do NOT require every noun or detail to appear in the line — that check is wrong for imagined scenes.
+
+REJECT only real-world biographical, historical, or verifiable claims that go beyond the line: named living public figures, specific identifiable real organizations, real news events, specific real calendar dates presented as fact, or invented source URLs.
+
+TODAY'S LINE: {{LINE}}
+
+DRAFT paragraph: {{PARAGRAPH}}
+
+Return ONLY a JSON object, no other text, with exactly these keys:
+- "ok": true if the draft only illustrates the line (scenic invention allowed) and does not add verifiable real-world claims beyond the line; false otherwise.
+- "reason": if ok is false, one short phrase naming the bad claim; if ok is true, the word "grounded".
+<!-- END POSTCARD REVIEW NOSEED -->
+
+---
+
 ## Story summarization prompt
 
-The pipeline sends this to the model for each headline, then renders the reply on the
-story page. Output contract: a JSON object with keys `headline` (our rewritten,
-non-verbatim headline, ≤ 90 chars), `summary` (3–4 sentences, ~55–90 words, grounded),
-and `why` (one short "why it's good news" line). No prose outside the JSON.
+The pipeline historically sent this to the model for each headline. Postcard v4
+stops calling story/kindness generation; blocks remain for reference and offline
+tests of leftover helpers.
 
 <!-- BEGIN STORY PROMPT -->
 You write for Get Happy, a warm daily postcard of good news. Rewrite the news item
@@ -81,11 +202,6 @@ Return ONLY a JSON object, no other text, with exactly these keys:
 
 ## Kindness expansion prompt
 
-Run once per micro-joy task (the ~99 in `data/tasks.txt`) to build an evergreen
-kindness page. Output contract: a JSON object with keys `title` (the action as a warm
-page title), `why` (2–3 sentences on why this small thing matters), and `ways` (an
-array of 2–3 short, concrete ways to do it).
-
 <!-- BEGIN KINDNESS PROMPT -->
 You write for Get Happy, a warm daily postcard of good. Expand the tiny kindness below
 into a short, genuine evergreen note in Get Happy's voice. Warm, plain, specific. No
@@ -101,13 +217,7 @@ Return ONLY a JSON object, no other text, with exactly these keys:
 
 ---
 
-## Grounding review prompt
-
-A second, independent model (different from the writer) fact-checks each draft before its
-page is published. Its ONLY concern is grounding — does the draft assert anything the
-source doesn't support? — which the deterministic number-gate can't fully see (e.g. an
-added "no vaccine needed," an invented rescue mechanism). Output contract: a JSON object
-with `ok` (boolean) and `reason` (short phrase). A `false` verdict skips the page + logs.
+## Grounding review prompt (legacy story pages)
 
 <!-- BEGIN REVIEW PROMPT -->
 You are the fact-checker for Get Happy. Below is a SOURCE (a news title and excerpt) and a

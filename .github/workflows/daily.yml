@@ -35,10 +35,11 @@ jobs:
 
       - name: Refresh joy.json
         env:
-          # Story-page summaries via free Cloudflare Workers AI (Kimi K2.6, reasoning
-          # off) over stdlib urllib. Optional: with no token the run is skip-only — the
-          # daily postcard never depends on it. Account ID is not secret; token is.
-          CLOUDFLARE_ACCOUNT_ID: "130f3aaa660ea95551e837c8d2ba4b21"
+          # Postcard writer + grounding via free Cloudflare Workers AI (Kimi writer,
+          # Mistral reviewer) over stdlib urllib. Optional: missing token OR account
+          # id → degrade path (reuse/fallback); Actions stay green. Set both secrets
+          # for the writer path. Token already present; add CLOUDFLARE_ACCOUNT_ID.
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: python scripts/update_joy.py ${{ inputs.force && '--force' || '' }}
 
