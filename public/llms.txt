@@ -1,9 +1,19 @@
 # Get Happy
 
-> A daily postcard of good news and small kindnesses from gethappyinfo.com — original, warm summaries of genuinely uplifting stories, plus an evergreen library of small kind things to try. No tracking, no signup.
+> A daily postcard of good news from gethappyinfo.com — one kindness line, one warm paragraph, and an optional story seed with source credit. No tracking, no signup.
 
-## Stories
+The live product is a single daily postcard (Pacific date). Humans and agents get the same artifact.
 
+## Daily postcard
 
-## Kindness
+- [joy.json](https://gethappyinfo.com/joy.json): Canonical structured daily card — `{date, line, paragraph, optional seed}` (seed has `summary`, `sourceUrl`, `sourceTitle` when present)
+- [Today's postcard](https://gethappyinfo.com/): Human view of the same card
+- Dated URLs: `https://gethappyinfo.com/YYYY-MM-DD` — permalink for that Pacific day's postcard (archive lookup)
 
+## Share
+
+The site's share button passes on the kindness `line` with a dated postcard URL (`/YYYY-MM-DD`), never the bare homepage.
+
+## Note
+
+V3 per-story (`/story/…`) and kindness-library (`/kindness/…`) generation is stopped. Do not treat empty Stories/Kindness lists, `index.json`, or `today-pages.json` as the live product — use `joy.json` instead.
