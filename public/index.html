@@ -629,9 +629,8 @@
         var credit = '';
         var seed = data.seed;
         if (seed && seed.sourceTitle && seed.sourceUrl && safeUrl(seed.sourceUrl) !== '#') {
-          credit = '<p class="seed-credit">Story source <a href="' + safeUrl(seed.sourceUrl)
-            + '" target="_blank" rel="noopener noreferrer">'
-            + escapeHtml(seed.sourceTitle) + '</a></p>';
+          credit = '<p class="seed-credit"><a href="' + safeUrl(seed.sourceUrl)
+            + '" target="_blank" rel="noopener noreferrer">Story source</a></p>';
         }
         newsEl.innerHTML = '<li style="border:0;padding:0;opacity:1;animation:none">' + para + credit + '</li>';
         // Postmark: date, else URL path date, else LA today (never bare /).
