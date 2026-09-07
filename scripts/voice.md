@@ -83,7 +83,7 @@ Not a brand. Not a preacher. Not Gregory at a desk.
 ### Postcard shape
 
 - **Line:** one concrete kindness to try today (from the task pool, or lightly rephrased).
-- **Paragraph:** 4–7 short sentences. One lived or vividly imagined *specific* scene in Get Happy's voice. If a research seed exists, every fact must come from it; invent no biography.
+- **Paragraph:** Prefer ~4–7 short sentences. One lived or vividly imagined *specific* scene in Get Happy's voice. No unexplained proper nouns; no clever one-line morals; do not imitate truncated GNN blurb voice. If a research seed exists, every fact must come from it; invent no biography.
 
 ### Golden samples (craft imitations only)
 
@@ -120,7 +120,11 @@ Today's kindness line (the ask on the card): {{LINE}}
 
 {{SEED_BLOCK}}
 
-Write ONE paragraph of 4 to 7 short sentences that pairs with that line.
+Write ONE paragraph of about 4 to 7 short sentences that pairs with that line.
+- Prefer ~4–7 short sentences (guidance, not padding).
+- No unexplained proper nouns — if you name a person, place, or organization, give enough plain context that a stranger understands who they are without the seed title.
+- No clever one-line morals or slogan endings ("Salvation traveled light," "kindness wins," etc.).
+- Do not imitate truncated Good News Network blurb voice (cut-off clauses, mid-thought fragments, reporter-name drive-bys).
 - If a SEED is provided above: every fact, name, place, number, and organization in the paragraph MUST come from the seed. Warm faithful rewording is fine. Invent nothing beyond the seed. Do not add a second ask or a P.S.
 - If no SEED is provided: write an imagined specific scene that illustrates today's line only. You may invent scenic detail (a setting, an unnamed person, a small moment). Do NOT invent a named living public figure, a real identifiable organization, a news event, a specific real date, or any source URL. Prefer she/he/they without a famous name.
 
@@ -176,6 +180,69 @@ Return ONLY a JSON object, no other text, with exactly these keys:
 <!-- END POSTCARD REVIEW NOSEED -->
 
 ---
+
+## Postcard readability review
+
+Separate from grounding. Grounding asks whether claims are supported; readability asks
+whether a stranger can follow the kindness paragraph in one quiet read-aloud.
+Fact-correct is not enough. Do **not** merge this into the grounding prompts above.
+
+Runs only on fresh AI writer drafts that just passed grounding — never on
+`voice-fallback.md` output or matching-card reuse.
+
+<!-- BEGIN POSTCARD READABILITY REVIEW -->
+You are the readability reviewer for Get Happy's daily postcard. Below is a DRAFT paragraph (and optional line/seed context). Your ONLY job is whether a first-time stranger can follow who did what, where, in plain words after one quiet read-aloud. Do NOT re-check factual grounding; assume another reviewer already did that.
+
+FAIL if any of these are true:
+1. A first-time reader cannot answer who did what, where, in plain words after one read.
+2. Proper names appear without enough context for a stranger (e.g. a reporter name dropped in without saying who they are).
+3. Clever fragments / slogan endings that don't carry fact ("Salvation traveled light that day," morals, wrap-up slogans).
+4. Sentences that require the seed title or source URL to decode.
+5. Cut-off or mid-thought clauses that read like scraped feed / truncated blurb copy.
+6. Em-dash pile-ups, hype, or banned AI-isms from Get Happy voice rules ("faith in humanity," "heartwarming," etc.).
+
+PASS if:
+1. About 3–7 short sentences (soft band — do NOT fail solely for being 3 or 8 if otherwise clear).
+2. Concrete nouns; clear deed; warm Get Happy voice.
+3. Works as a postcard paragraph without opening the source URL or seed title.
+
+TODAY'S LINE: {{LINE}}
+
+SEED summary (may be empty): {{SUMMARY}}
+SEED source title (may be empty): {{SOURCE_TITLE}}
+
+DRAFT paragraph: {{PARAGRAPH}}
+
+Return ONLY a JSON object, no other text, with exactly these keys:
+- "ok": true if the draft is readable as a postcard for a stranger; false otherwise.
+- "reason": if ok is false, one short phrase naming the readability problem; if ok is true, the word "readable".
+<!-- END POSTCARD READABILITY REVIEW -->
+
+---
+
+## Postcard readability rewrite hint
+
+Optional add-on fed to the writer when readability fails. Not a separate model call
+shape — the pipeline appends this context to a rewrite request.
+
+<!-- BEGIN POSTCARD READABILITY REWRITE -->
+Your previous draft failed Get Happy's readability review. Rewrite the paragraph so a stranger can follow who did what, where, in one quiet read-aloud.
+
+Previous draft:
+{{DRAFT}}
+
+Readability problem to fix:
+{{REASON}}
+
+Keep the same grounding rules as the main postcard prompt (facts from seed only when a seed exists; no invented real-world claims on no-seed days). Prefer ~4–7 short sentences. No unexplained proper nouns. No clever one-line morals. Do not imitate truncated GNN blurb voice.
+
+Today's kindness line: {{LINE}}
+
+{{SEED_BLOCK}}
+
+Return ONLY a JSON object, no other text, with exactly this key:
+- "paragraph": the rewritten 4–7 sentence paragraph in Get Happy's voice.
+<!-- END POSTCARD READABILITY REWRITE -->
 
 ## Story summarization prompt
 
