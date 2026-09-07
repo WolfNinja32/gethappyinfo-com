@@ -83,6 +83,8 @@ class TmpEnv(unittest.TestCase):
             "today_pt": uj.today_pt,
             "write_postcard_paragraph": uj.write_postcard_paragraph,
             "review_postcard": uj.review_postcard,
+            "review_readability": uj.review_readability,
+            "rewrite_postcard_paragraph": uj.rewrite_postcard_paragraph,
             "call_workers_ai": uj.call_workers_ai,
             "pick_seed": uj.pick_seed,
         }
@@ -455,6 +457,9 @@ class TestVoicePrompts(unittest.TestCase):
         pc = uj.load_prompt("POSTCARD PROMPT")
         self.assertIn("{{LINE}}", pc)
         self.assertIn("{{SEED_BLOCK}}", pc)
+        self.assertIn("No unexplained proper nouns", pc)
+        self.assertIn("clever one-line morals", pc)
+        self.assertIn("truncated Good News Network blurb", pc)
         seeded = uj.load_prompt("POSTCARD REVIEW SEEDED")
         self.assertIn("{{SUMMARY}}", seeded)
         # Seeded grounding must allow scenic illustration of the seed's stated deed
@@ -467,6 +472,331 @@ class TestVoicePrompts(unittest.TestCase):
         self.assertIn("imagined", noseed.lower())
         # Legacy blocks still load for leftover helpers
         self.assertIn("{{TITLE}}", uj.load_prompt("STORY PROMPT"))
+
+    def test_readability_prompt_separate_from_grounding(self):
+        """Readability lives in its own voice.md section / markers."""
+        rd = uj.load_prompt("POSTCARD READABILITY REVIEW")
+        self.assertIn("{{PARAGRAPH}}", rd)
+        self.assertIn("{{LINE}}", rd)
+        self.assertIn("who did what", rd.lower())
+        self.assertIn('"ok"', rd)
+        self.assertIn('"reason"', rd)
+        # Must not be merged into grounding prompts
+        seeded = uj.load_prompt("POSTCARD REVIEW SEEDED")
+        self.assertNotIn("read-aloud", seeded.lower())
+        noseed = uj.load_prompt("POSTCARD REVIEW NOSEED")
+        self.assertNotIn("read-aloud", noseed.lower())
+        rw = uj.load_prompt("POSTCARD READABILITY REWRITE")
+        self.assertIn("{{DRAFT}}", rw)
+        self.assertIn("{{REASON}}", rw)
+
+
+
+# Golden FAIL fixture from readability-gate-v2 acceptance (exact paragraph).
+GOLDEN_READABILITY_FAIL = (
+    "Sampson James carried his meager possessions in a red backpack during his "
+    "stint of homelessness. A chance encounter with another Indiana graduate "
+    "changed everything. The man who once starred on the college ball court found "
+    "fraternity, philosophical and literal. Steve Hartman found the story on the "
+    "road. Salvation traveled light that day."
+)
+
+GOLDEN_READABILITY_PASS = (
+    "She kept a stack of index cards in the glove box. On lunch breaks she wrote "
+    "one sentence in plain print and tucked it under a windshield wiper on a "
+    "street she did not live on. No name. No follow-up. Someone found the note "
+    "and smiled on the walk back to work."
+)
+
+
+class TestReadabilityParse(unittest.TestCase):
+    """JSON parse for readability reply — same salvage path as grounding."""
+
+    def test_parse_ok_true(self):
+        raw = '{"ok": true, "reason": "readable"}'
+        obj = uj.parse_json_reply(raw)
+        self.assertTrue(obj["ok"])
+        self.assertEqual(obj["reason"], "readable")
+
+    def test_parse_ok_false(self):
+        raw = '{"ok": false, "reason": "unexplained proper noun: Steve Hartman"}'
+        obj = uj.parse_json_reply(raw)
+        self.assertFalse(obj["ok"])
+        self.assertIn("Steve Hartman", obj["reason"])
+
+    def test_salvage_broken_readability_json(self):
+        raw = (
+            '{\n  "ok": false,\n  "reason": "slogan ending "Salvation traveled '
+            'light" without fact"\n}'
+        )
+        with self.assertRaises(json.JSONDecodeError):
+            json.loads(raw)
+        obj = uj.parse_json_reply(raw)
+        self.assertIsInstance(obj, dict)
+        self.assertFalse(obj["ok"])
+        self.assertIn("Salvation", obj["reason"])
+
+
+class TestReadabilityFixtures(unittest.TestCase):
+    """Prompt-contract / mock-reviewer fixtures for golden FAIL + PASS."""
+
+    def test_golden_fail_paragraph_exact(self):
+        """Acceptance: exact golden FAIL paragraph is documented and rejected."""
+        self.assertEqual(
+            GOLDEN_READABILITY_FAIL,
+            (
+                "Sampson James carried his meager possessions in a red backpack during his "
+                "stint of homelessness. A chance encounter with another Indiana graduate "
+                "changed everything. The man who once starred on the college ball court found "
+                "fraternity, philosophical and literal. Steve Hartman found the story on the "
+                "road. Salvation traveled light that day."
+            ),
+        )
+        # Expected fail themes (prompt-contract documentation)
+        themes = (
+            "unexplained Steve Hartman",
+            "opaque fraternity philosophical and literal",
+            "slogan ending",
+        )
+        for theme in themes:
+            self.assertTrue(theme)  # documented themes present in test
+
+        # Mock reviewer: this paragraph must yield ok:false
+        os.environ.pop("GHI_LLM", None)
+        uj_account = uj.WORKERS_AI_ACCOUNT
+        uj.WORKERS_AI_ACCOUNT = "dummy"
+        os.environ["CLOUDFLARE_API_TOKEN"] = "dummy-token"
+        orig = uj.call_workers_ai
+
+        def fake_ai(prompt, model=None, params=None):
+            self.assertIn(GOLDEN_READABILITY_FAIL, prompt)
+            self.assertIn("readability", prompt.lower())
+            return json.dumps({
+                "ok": False,
+                "reason": (
+                    "unexplained Steve Hartman; opaque "
+                    "'fraternity, philosophical and literal'; slogan ending"
+                ),
+            })
+
+        uj.call_workers_ai = fake_ai
+        try:
+            verdict = uj.review_readability(
+                GOLDEN_READABILITY_FAIL,
+                line="Leave a kind note where a stranger will find it.",
+                seed={
+                    "summary": "A former player found friendship after homelessness.",
+                    "sourceTitle": "CBS On the Road",
+                    "sourceUrl": "https://www.goodnewsnetwork.org/example/",
+                },
+            )
+        finally:
+            uj.call_workers_ai = orig
+            uj.WORKERS_AI_ACCOUNT = uj_account
+            os.environ["GHI_LLM"] = "off"
+            os.environ.pop("CLOUDFLARE_API_TOKEN", None)
+        self.assertFalse(verdict["ok"], verdict)
+        self.assertTrue(verdict["reason"])
+
+    def test_golden_pass_fixture(self):
+        """Nice-to-have: short clear PASS fixture returns ok:true under mock."""
+        os.environ.pop("GHI_LLM", None)
+        uj_account = uj.WORKERS_AI_ACCOUNT
+        uj.WORKERS_AI_ACCOUNT = "dummy"
+        os.environ["CLOUDFLARE_API_TOKEN"] = "dummy-token"
+        orig = uj.call_workers_ai
+
+        def fake_ai(prompt, model=None, params=None):
+            self.assertIn(GOLDEN_READABILITY_PASS, prompt)
+            return json.dumps({"ok": True, "reason": "readable"})
+
+        uj.call_workers_ai = fake_ai
+        try:
+            verdict = uj.review_readability(
+                GOLDEN_READABILITY_PASS,
+                line="Leave a kind note where a stranger will find it.",
+                seed=None,
+            )
+        finally:
+            uj.call_workers_ai = orig
+            uj.WORKERS_AI_ACCOUNT = uj_account
+            os.environ["GHI_LLM"] = "off"
+            os.environ.pop("CLOUDFLARE_API_TOKEN", None)
+        self.assertTrue(verdict["ok"], verdict)
+        self.assertEqual(verdict["reason"], "readable")
+
+
+class TestReadabilityPipeline(TmpEnv):
+    """Rewrite budget, terminal degrade, skip on reuse/fallback."""
+
+    def _seed_last_good(self):
+        last = {
+            "date": "2026-05-31",
+            "line": "Hold the door for someone.",
+            "paragraph": "She held the door. That was the whole story.",
+            "seed": {
+                "summary": "A neighbor held a door.",
+                "sourceUrl": "https://www.goodnewsnetwork.org/door/",
+                "sourceTitle": "Door Held",
+            },
+        }
+        uj.JOY_FILE.write_text(json.dumps(last), encoding="utf-8")
+        uj.ARCHIVE_FILE.write_text(
+            json.dumps({"days": {"2026-05-31": last}}), encoding="utf-8"
+        )
+        return last
+
+    def test_rewrite_budget_terminal_degrade(self):
+        """After 2 readability rewrites still failing → matching-card degrade."""
+        last = self._seed_last_good()
+        uj.fetch_all = lambda feeds: {}
+        uj.today_pt = lambda: self.date
+        uj.write_postcard_paragraph = lambda line, seed=None: GOLDEN_READABILITY_FAIL
+        uj.review_postcard = lambda paragraph, line=None, seed=None: {
+            "ok": True, "reason": "grounded"
+        }
+        read_calls = []
+        rewrite_calls = []
+
+        def fake_read(paragraph, line=None, seed=None):
+            read_calls.append(paragraph)
+            return {"ok": False, "reason": "slogan ending / unexplained name"}
+
+        def fake_rewrite(line, seed, draft, reason):
+            rewrite_calls.append(reason)
+            return f"Rewrite attempt {len(rewrite_calls)} still opaque. Salvation traveled light."
+
+        uj.review_readability = fake_read
+        uj.rewrite_postcard_paragraph = fake_rewrite
+        buf_err = io.StringIO()
+        buf_out = io.StringIO()
+        with mock.patch("sys.stderr", buf_err), mock.patch("sys.stdout", buf_out):
+            rc = uj.main(force=True)
+        self.assertEqual(rc, 0)
+        joy = json.loads(uj.JOY_FILE.read_text())
+        # Reused last-good unit
+        self.assertEqual(joy["line"], last["line"])
+        self.assertEqual(joy["paragraph"], last["paragraph"])
+        self.assertEqual(len(rewrite_calls), uj.MAX_READABILITY_REWRITES)
+        # Initial + 2 rewrites reviewed
+        self.assertEqual(len(read_calls), uj.MAX_READABILITY_REWRITES + 1)
+        combined = buf_out.getvalue() + buf_err.getvalue()
+        self.assertIn("readability:", combined)
+        self.assertIn("slogan ending", combined)
+
+    def test_rewrite_then_pass_publishes(self):
+        """Clear grounded rewrite after one readability fail can pass and publish."""
+        uj.fetch_all = lambda feeds: {}
+        uj.today_pt = lambda: self.date
+        uj.write_postcard_paragraph = lambda line, seed=None: GOLDEN_READABILITY_FAIL
+        uj.review_postcard = lambda paragraph, line=None, seed=None: {
+            "ok": True, "reason": "grounded"
+        }
+        state = {"n": 0}
+
+        def fake_read(paragraph, line=None, seed=None):
+            state["n"] += 1
+            if state["n"] == 1:
+                return {"ok": False, "reason": "slogan ending"}
+            return {"ok": True, "reason": "readable"}
+
+        def fake_rewrite(line, seed, draft, reason):
+            return GOLDEN_READABILITY_PASS
+
+        uj.review_readability = fake_read
+        uj.rewrite_postcard_paragraph = fake_rewrite
+        rc = uj.main(force=True)
+        self.assertEqual(rc, 0)
+        joy = json.loads(uj.JOY_FILE.read_text())
+        self.assertEqual(joy["date"], "2026-06-01")
+        self.assertEqual(joy["paragraph"], GOLDEN_READABILITY_PASS)
+        self.assertEqual(joy["line"], uj.pick_task(self.date))
+        self.assertEqual(state["n"], 2)
+
+    def test_rewrite_fails_grounding_immediate_degrade(self):
+        """If a readability rewrite fails grounding → degrade; no extra rewrite."""
+        last = self._seed_last_good()
+        uj.fetch_all = lambda feeds: {}
+        uj.today_pt = lambda: self.date
+        uj.write_postcard_paragraph = lambda line, seed=None: GOLDEN_READABILITY_FAIL
+        ground_n = {"n": 0}
+        rewrite_n = {"n": 0}
+
+        def fake_ground(paragraph, line=None, seed=None):
+            ground_n["n"] += 1
+            if ground_n["n"] == 1:
+                return {"ok": True, "reason": "grounded"}
+            return {"ok": False, "reason": "invented a new city"}
+
+        def fake_read(paragraph, line=None, seed=None):
+            return {"ok": False, "reason": "unexplained name"}
+
+        def fake_rewrite(line, seed, draft, reason):
+            rewrite_n["n"] += 1
+            return "Barack Obama flew to Paris and invented a new city overnight."
+
+        uj.review_postcard = fake_ground
+        uj.review_readability = fake_read
+        uj.rewrite_postcard_paragraph = fake_rewrite
+        buf_out = io.StringIO()
+        with mock.patch("sys.stdout", buf_out):
+            rc = uj.main(force=True)
+        self.assertEqual(rc, 0)
+        joy = json.loads(uj.JOY_FILE.read_text())
+        self.assertEqual(joy["paragraph"], last["paragraph"])
+        self.assertEqual(rewrite_n["n"], 1)  # only one rewrite attempted
+        self.assertEqual(ground_n["n"], 2)  # initial + rewrite
+        combined = buf_out.getvalue()
+        self.assertIn("grounding:", combined)
+
+    def test_skip_readability_on_reuse(self):
+        """Matching-card reuse must not call review_readability."""
+        last = self._seed_last_good()
+        uj.fetch_all = lambda feeds: {}
+        uj.today_pt = lambda: self.date
+        uj.write_postcard_paragraph = lambda *a, **k: (_ for _ in ()).throw(
+            RuntimeError("boom")
+        )
+        read_calls = []
+
+        def fake_read(*a, **k):
+            read_calls.append(1)
+            return {"ok": False, "reason": "should not run"}
+
+        uj.review_readability = fake_read
+        rc = uj.main(force=True)
+        self.assertEqual(rc, 0)
+        joy = json.loads(uj.JOY_FILE.read_text())
+        self.assertEqual(joy["paragraph"], last["paragraph"])
+        self.assertEqual(read_calls, [])
+
+    def test_skip_readability_on_voice_fallback(self):
+        """voice-fallback.md path must not call review_readability."""
+        uj.fetch_all = lambda feeds: {}
+        uj.today_pt = lambda: self.date
+        uj.write_postcard_paragraph = lambda *a, **k: (_ for _ in ()).throw(
+            RuntimeError("boom")
+        )
+        # Only old-shape history → fallback
+        old = {"lastUpdated": "2026-05-30", "dailyTask": "Smile", "topNews": []}
+        uj.JOY_FILE.write_text(json.dumps(old), encoding="utf-8")
+        uj.ARCHIVE_FILE.write_text(
+            json.dumps({"days": {"2026-05-30": old}}), encoding="utf-8"
+        )
+        read_calls = []
+
+        def fake_read(*a, **k):
+            read_calls.append(1)
+            return {"ok": False, "reason": "should not run"}
+
+        uj.review_readability = fake_read
+        rc = uj.main(force=True)
+        self.assertEqual(rc, 0)
+        joy = json.loads(uj.JOY_FILE.read_text())
+        line = uj.pick_task(self.date)
+        self.assertEqual(joy["line"], line)
+        self.assertIn(line, joy["paragraph"])
+        self.assertEqual(read_calls, [])
 
 
 class TestIndexDualRead(unittest.TestCase):

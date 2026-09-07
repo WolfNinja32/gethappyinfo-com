@@ -2,9 +2,9 @@
 """gethappyinfo.com daily updater — postcard pipeline v4 (stdlib only).
 
 Writes public/joy.json as {date, line, paragraph, optional seed}. Research may
-return one GNN seed; writer + grounding (Workers AI) produce a matching
-paragraph. Matching-card degrade: on writer/grounding fail, reuse yesterday's
-line+paragraph+seed unit and only advance date. Site never blanks.
+return one GNN seed; writer + grounding + readability (Workers AI) produce a
+matching paragraph. Matching-card degrade: on writer/grounding/readability fail,
+reuse yesterday's line+paragraph+seed unit and only advance date. Site never blanks.
 
 Design invariants:
   * No third-party packages — urllib + xml.etree.
@@ -74,6 +74,8 @@ WRITER_PARAMS = {"chat_template_kwargs": {"thinking": False}}  # K2.6 reasoning 
 # Independent grounding reviewer — a DIFFERENT, non-reasoning model (so it can't hit the
 # token-blowup that disqualified reasoning models), chosen via bake-off: fast, clean JSON.
 REVIEW_MODEL = "@cf/mistralai/mistral-small-3.1-24b-instruct"
+# Readability reuses REVIEW_MODEL (independent of writer). Budget is per daily run.
+MAX_READABILITY_REWRITES = 2
 WORKERS_AI_MAX_TOKENS = 1024
 WORKERS_AI_TIMEOUT = 90  # Kimi-off is usually ~5s but can run ~25s; latency is fine here
 
@@ -1179,6 +1181,90 @@ def review_postcard(paragraph: str, *, line: str, seed: dict | None) -> dict:
     return {"ok": bool(obj.get("ok", False)), "reason": reason}
 
 
+def review_readability(paragraph: str, *, line: str, seed: dict | None = None) -> dict:
+    """Postcard readability gate — separate from grounding.
+
+    Returns {"ok": bool, "reason": str}. Fail-closed on missing ok.
+    GHI_LLM=off auto-passes (pipeline tests monkeypatch this for FAIL paths).
+    Call only on fresh AI writer drafts that just passed grounding — never on
+    voice-fallback or matching-card reuse.
+    """
+    if os.environ.get("GHI_LLM") == "off":
+        return {"ok": True, "reason": "llm-off"}
+    if not workers_ai_configured():
+        raise RuntimeError("CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID not set")
+
+    summary = (seed or {}).get("summary", "") if seed else ""
+    source_title = (seed or {}).get("sourceTitle", "") if seed else ""
+    prompt = (
+        load_prompt("POSTCARD READABILITY REVIEW")
+        .replace("{{LINE}}", line or "")
+        .replace("{{SUMMARY}}", summary)
+        .replace("{{SOURCE_TITLE}}", source_title)
+        .replace("{{PARAGRAPH}}", paragraph)
+    )
+    raw = call_workers_ai(prompt, model=REVIEW_MODEL)
+    obj = parse_json_reply(raw)
+    reason = obj.get("reason", "")
+    if not isinstance(reason, str):
+        reason = (
+            json.dumps(reason, ensure_ascii=False)
+            if isinstance(reason, (dict, list))
+            else str(reason)
+        )
+    return {"ok": bool(obj.get("ok", False)), "reason": reason}
+
+
+def rewrite_postcard_paragraph(
+    line: str, seed: dict | None, draft: str, reason: str
+) -> str | None:
+    """Rewrite a draft that failed readability; feed draft + reason to writer.
+
+    GHI_LLM=off yields a clearer deterministic rewrite for offline tests.
+    """
+    if os.environ.get("GHI_LLM") == "off":
+        # Deterministic offline rewrite — plain, grounded-ish, readable.
+        if seed:
+            return (
+                f"Someone did a small good thing. {seed.get('summary', '').strip()} "
+                f"It pairs with today's ask: {line} That was enough for one card."
+            )
+        return (
+            f"Someone meant to skip it and did it anyway. {line} "
+            "It took almost nothing. The day shifted half a degree. "
+            "They went on lighter for having refused to wait."
+        )
+    if not workers_ai_configured():
+        raise RuntimeError("CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID not set")
+
+    if seed:
+        seed_block = (
+            "SEED (use ONLY these facts; invent nothing beyond them):\n"
+            f"- summary: {seed.get('summary', '')}\n"
+            f"- sourceTitle: {seed.get('sourceTitle', '')}\n"
+            f"- sourceUrl: {seed.get('sourceUrl', '')}"
+        )
+    else:
+        seed_block = (
+            "No SEED today (research miss). Write an imagined scene from the "
+            "line only — invent no real biography, public figure, org, news event, "
+            "or source URL."
+        )
+    prompt = (
+        load_prompt("POSTCARD READABILITY REWRITE")
+        .replace("{{DRAFT}}", draft)
+        .replace("{{REASON}}", reason or "unreadable")
+        .replace("{{LINE}}", line)
+        .replace("{{SEED_BLOCK}}", seed_block)
+    )
+    raw = call_workers_ai(prompt, model=WRITER_MODEL, params=WRITER_PARAMS)
+    obj = parse_json_reply(raw)
+    para = _coerce_postcard_paragraph(obj.get("paragraph"))
+    if not para:
+        raise ValueError("readability rewrite missing paragraph")
+    return para
+
+
 def find_last_good_card(existing, archive: dict) -> dict | None:
     """Most recent new-shape card (matching line+paragraph[+seed] unit)."""
     if is_new_shape(existing):
@@ -1276,7 +1362,9 @@ def main(force: bool = False) -> int:
     else:
         print("[update_joy] research miss — continuing with today's line only (no seed)")
 
-    # --- Writer + grounding (optional AI) ----------------------------------
+    # --- Writer + grounding + readability (optional AI) --------------------
+    # Readability runs ONLY on fresh AI writer drafts that passed grounding.
+    # voice-fallback and matching-card reuse skip readability entirely.
     paragraph = None
     used_seed = seed
     degrade_reason = None
@@ -1293,19 +1381,63 @@ def main(force: bool = False) -> int:
             if not draft:
                 degrade_reason = "writer-empty"
             else:
-                verdict = review_postcard(draft, line=line, seed=seed)
-                if not verdict.get("ok"):
-                    degrade_reason = f"grounding:{verdict.get('reason', '')[:80]}"
-                    actions_warning(
-                        f"grounding rejected draft ({verdict.get('reason', '')}); "
-                        "will reuse last-good or fallback"
+                readability_rewrites = 0
+                while draft and paragraph is None and degrade_reason is None:
+                    verdict = review_postcard(draft, line=line, seed=seed)
+                    if not verdict.get("ok"):
+                        # Initial grounding fail, OR rewrite failed grounding →
+                        # immediate matching-card degrade (do not spend another
+                        # readability rewrite on a grounding fail).
+                        degrade_reason = f"grounding:{verdict.get('reason', '')[:80]}"
+                        actions_warning(
+                            f"grounding rejected draft ({verdict.get('reason', '')}); "
+                            "will reuse last-good or fallback"
+                        )
+                        break
+                    read_verdict = review_readability(draft, line=line, seed=seed)
+                    if read_verdict.get("ok"):
+                        paragraph = draft
+                        break
+                    reason = str(read_verdict.get("reason", "") or "unreadable")
+                    short_reason = reason[:80]
+                    if readability_rewrites >= MAX_READABILITY_REWRITES:
+                        degrade_reason = f"readability:{short_reason}"
+                        actions_warning(
+                            f"readability still failing after "
+                            f"{MAX_READABILITY_REWRITES} rewrite(s) ({reason}); "
+                            "will reuse last-good or fallback"
+                        )
+                        break
+                    # Increment only when readability fails AND a rewrite is attempted.
+                    readability_rewrites += 1
+                    print(
+                        f"[update_joy] readability fail attempt "
+                        f"{readability_rewrites}/{MAX_READABILITY_REWRITES}: {reason}",
+                        file=sys.stderr,
                     )
-                else:
-                    paragraph = draft
+                    try:
+                        draft = rewrite_postcard_paragraph(
+                            line, seed, draft, reason
+                        )
+                    except Exception as rex:
+                        degrade_reason = f"readability:{short_reason}"
+                        actions_warning(
+                            f"readability rewrite threw ({type(rex).__name__}: {rex}); "
+                            "will reuse last-good or fallback"
+                        )
+                        draft = None
+                        break
+                    if not draft:
+                        degrade_reason = f"readability:{short_reason}"
+                        actions_warning(
+                            "readability rewrite returned empty; "
+                            "will reuse last-good or fallback"
+                        )
+                        break
         except Exception as exc:
             degrade_reason = f"writer-error:{type(exc).__name__}"
             actions_warning(
-                f"writer/grounding failed ({type(exc).__name__}: {exc}); "
+                f"writer/grounding/readability failed ({type(exc).__name__}: {exc}); "
                 "will reuse last-good or fallback"
             )
 
