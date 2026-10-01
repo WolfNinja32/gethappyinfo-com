@@ -14,6 +14,7 @@ data/tasks.txt         Micro-joy pool (one per line; # comments + blanks ignored
 data/recent.json       Rolling 14-day list of shown URLs (cross-day dedup).
 scripts/update_joy.py  The daily updater — Python stdlib only, no dependencies.
 .github/workflows/daily.yml   Daily GitHub Actions cron that runs the updater.
+scripts/build_fb_handoff.py   Facebook handoff text (public/fb/), run during the share-vertical bake.
 ```
 
 Once a day, GitHub Actions runs `update_joy.py`, which:
@@ -30,6 +31,30 @@ Once a day, GitHub Actions runs `update_joy.py`, which:
 
 No LLM, no build step, no server. Cloudflare Pages serves `public/` statically
 and redeploys on every push.
+
+## Facebook handoff (`/fb/today.txt`)
+
+`https://gethappyinfo.com/fb/today.txt` (plus a dated copy `public/fb/YYYY-MM-DD.txt`)
+holds the ready-to-post Facebook text:
+
+```
+<caption>
+
+Pass it on ✉
+https://gethappyinfo.com/YYYY-MM-DD
+
+Image: https://gethappyinfo.com/share-vertical.png
+```
+
+- **Caption:** `fb/captions/<date>.txt` (optional override, repo root, not served;
+  see `fb/captions/README.md`), otherwise `public/joy.json` → `line` word for word.
+- **When:** run `python scripts/build_fb_handoff.py` during the manual
+  share-vertical bake, right after the PNGs are generated, and commit
+  `public/fb/<date>.txt` + `public/fb/today.txt` in the **same PR** as
+  `public/share-vertical.png` + `public/fb-share.png`. today.txt therefore
+  never flips before its image ships. Idempotent; `--check` / `--dry-run` available.
+- **Headers:** `public/_headers` serves `/fb/*` as `text/plain; charset=utf-8`
+  with `Cache-Control: no-cache`.
 
 ## Run / test locally
 
