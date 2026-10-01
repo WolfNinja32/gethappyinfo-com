@@ -1,0 +1,5 @@
+# Facebook handoff text: always revalidate, explicit UTF-8.
+/fb/*
+  Content-Type: text/plain; charset=utf-8
+  Cache-Control: no-cache
+  X-Content-Type-Options: nosniff
