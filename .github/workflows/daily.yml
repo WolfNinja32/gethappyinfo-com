@@ -2,17 +2,30 @@ name: Daily joy update
 
 on:
   schedule:
-    # BACKUP trigger only. The primary, punctual trigger is a Cloudflare Worker
-    # cron (gethappy-services/daily-trigger) that fires at 12:00 UTC and dispatches
-    # this workflow. GitHub's own scheduler is unreliable — it delays runs hours or
-    # drops them entirely — so it runs LATER (14:00 UTC) purely as a safety net. If
-    # the Worker already updated today's postcard, update_joy.py's idempotency guard
-    # makes this backup run a clean no-op.
-    - cron: "0 14 * * *"
+    # Rollover target: new card + share-vertical.png + /fb/today.txt live on the CDN
+    # by ~1–2am PT, hard deadline 5:00am PT. All times are after Pacific midnight
+    # year-round (PDT = UTC-7 in summer, PST = UTC-8 in winter):
+    #
+    #   08:15 UTC = 1:15am PDT / 12:15am PST   early run (same time as the intended
+    #                                           primary Cloudflare Worker cron)
+    #   09:30 UTC = 2:30am PDT /  1:30am PST   BACKUP
+    #
+    # The punctual primary trigger is the Cloudflare Worker cron
+    # (gethappy-services/daily-trigger), which dispatches this workflow
+    # (workflow_dispatch). GitHub's scheduler can delay or drop runs, so these
+    # schedules are safety nets. update_joy.py's idempotency guard makes any run
+    # after the first a clean no-op for joy.json; the render step only runs when
+    # the card changed or the share outputs are stale.
+    - cron: "15 8 * * *"
+    - cron: "30 9 * * *"
   workflow_dispatch:
     inputs:
       force:
-        description: "Regenerate today's postcard even if it's already current (passes --force)"
+        description: "Regenerate today's postcard even if it's already current (passes --force); also forces the share render"
+        type: boolean
+        default: false
+      dry_run:
+        description: "Dry run: skip update_joy, render share images + FB text from the checked-out joy.json, upload as artifact; never commit or push"
         type: boolean
         default: false
 
@@ -26,14 +39,24 @@ concurrency:
 jobs:
   update:
     runs-on: ubuntu-latest
+    env:
+      DRY_RUN: ${{ inputs.dry_run && 'true' || 'false' }}
+      FORCE: ${{ inputs.force && 'true' || 'false' }}
     steps:
       - uses: actions/checkout@v6
 
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
+          cache: pip
+          cache-dependency-path: render/requirements.txt
+
+      - name: Fingerprint current card
+        id: before
+        run: echo "fp=$(python scripts/render_share.py --fingerprint)" >> "$GITHUB_OUTPUT"
 
       - name: Refresh joy.json
+        if: env.DRY_RUN != 'true'
         env:
           # Postcard writer + grounding via free Cloudflare Workers AI (Kimi writer,
           # Mistral reviewer) over stdlib urllib. Account ID is public/non-secret
@@ -43,7 +66,79 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: python scripts/update_joy.py ${{ inputs.force && '--force' || '' }}
 
+      - name: Decide whether to render
+        id: decide
+        run: |
+          after=$(python scripts/render_share.py --fingerprint)
+          reason=""
+          if [[ "$DRY_RUN" == "true" ]]; then reason="dry run"
+          elif [[ "$FORCE" == "true" ]]; then reason="force"
+          elif [[ "$after" != "${{ steps.before.outputs.fp }}" ]]; then reason="card changed"
+          elif ! python scripts/build_fb_handoff.py --check >/dev/null 2>&1; then reason="fb/today.txt stale vs joy.json (earlier render missing/failed)"
+          fi
+          echo "joy_date=$(python -c 'import json;print(json.load(open("public/joy.json"))["date"])')" >> "$GITHUB_OUTPUT"
+          if [[ -n "$reason" ]]; then
+            echo "render=true" >> "$GITHUB_OUTPUT"; echo "Render needed: $reason"
+          else
+            echo "render=false" >> "$GITHUB_OUTPUT"; echo "Card unchanged and share outputs current; skipping render."
+          fi
+
+      - name: Install render deps
+        id: deps
+        if: steps.decide.outputs.render == 'true'
+        continue-on-error: true
+        run: |
+          if ! ldconfig -p | grep -q 'libcairo\.so\.2'; then
+            sudo apt-get update -q && sudo apt-get install -y -q libcairo2
+          fi
+          python -m pip install --disable-pip-version-check -r render/requirements.txt
+
+      # Writes public/share-vertical.png + public/fb-share.png, then public/fb/<date>.txt
+      # + public/fb/today.txt. Any failure restores all four to HEAD so the previous
+      # image and today.txt stay untouched (joy.json is still committed below).
+      - name: Render share images + FB handoff
+        id: render
+        if: steps.decide.outputs.render == 'true' && env.DRY_RUN != 'true' && steps.deps.outcome == 'success'
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          restore() {
+            echo "::error::Share render failed; restoring previous share images and fb/ text"
+            git checkout -- public/share-vertical.png public/fb-share.png public/fb/ || true
+            git clean -fdq -- public/fb/ || true
+          }
+          trap restore ERR
+          python scripts/render_share.py
+          python scripts/build_fb_handoff.py
+          python scripts/build_fb_handoff.py --check
+
+      - name: Render (dry run → artifact)
+        id: render_dry
+        if: steps.decide.outputs.render == 'true' && env.DRY_RUN == 'true'
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/share-render"
+          python scripts/render_share.py --out-dir "$out"
+          python scripts/build_fb_handoff.py --dry-run > "$out/today.txt"
+          new=$(sha256sum "$out/share-vertical.png" | cut -d' ' -f1)
+          repo=$(sha256sum public/share-vertical.png | cut -d' ' -f1)
+          {
+            echo "### Dry-run share render (${{ steps.decide.outputs.joy_date }})"
+            echo "- rendered share-vertical.png sha256: \`$new\`"
+            echo "- committed public/share-vertical.png sha256: \`$repo\`"
+            if [[ "$new" == "$repo" ]]; then echo "- **byte-identical** to the committed image"; else echo "- differs from the committed image (inspect the artifact)"; fi
+            echo '```'; cat "$out/today.txt"; echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload dry-run artifact
+        if: steps.render_dry.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: share-render-${{ steps.decide.outputs.joy_date }}
+          path: ${{ runner.temp }}/share-render/
+
       - name: Commit if changed
+        if: env.DRY_RUN != 'true'
         run: |
           git config user.name "gethappyinfo-bot"
           git config user.email "bot@gethappyinfo.com"
@@ -53,14 +148,37 @@ jobs:
           OPTIONAL_PATHS="public/index.json public/sitemap.xml public/llms.txt public/robots.txt \
                           public/today-pages.json data/kindness-slugs.json data/generation-log.json \
                           public/story public/kindness"
-          if [[ -n "$(git status --porcelain $CORE_PATHS)" ]]; then
-            git add $CORE_PATHS
-            # Add optional files only if they exist
-            for path in $OPTIONAL_PATHS; do
-              [[ -e "$path" ]] && git add "$path" || true
-            done
-            git commit -m "Daily joy update ($(date -u +%Y-%m-%d))"
-            git push
-          else
-            echo "No changes to commit."
+          # Share outputs: only when the render step fully succeeded, so image,
+          # today.txt and joy.json flip together in ONE commit (one deploy).
+          SHARE_PATHS="public/share-vertical.png public/fb-share.png public/fb"
+          git add $CORE_PATHS
+          for path in $OPTIONAL_PATHS; do
+            [[ -e "$path" ]] && git add "$path" || true
+          done
+          if [[ "${{ steps.render.outcome }}" == "success" ]]; then
+            git add $SHARE_PATHS
           fi
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+          git commit -m "Daily joy update (${{ steps.decide.outputs.joy_date }})"
+          git push || { git pull --rebase && git push; }
+
+      - name: Summary
+        if: always() && env.DRY_RUN != 'true'
+        run: |
+          {
+            echo "### Daily joy update (${{ steps.decide.outputs.joy_date }})"
+            echo "- render needed: ${{ steps.decide.outputs.render }}"
+            echo "- render deps: ${{ steps.deps.outcome || 'skipped' }}"
+            echo "- share render + fb handoff: ${{ steps.render.outcome || 'skipped' }}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Fail visibly if the share render failed
+        if: steps.decide.outputs.render == 'true' && env.DRY_RUN != 'true' && steps.render.outcome != 'success'
+        run: |
+          msg="Share render did not complete (deps: ${{ steps.deps.outcome }}, render: ${{ steps.render.outcome }}). joy.json was committed; share-vertical.png, fb-share.png and /fb/today.txt still show the PREVIOUS day. Fix and re-run this workflow (workflow_dispatch) — it will re-render because today.txt is stale."
+          echo "::error::$msg"
+          echo "> **⚠️ $msg**" >> "$GITHUB_STEP_SUMMARY"
+          exit 1

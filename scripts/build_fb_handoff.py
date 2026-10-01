@@ -19,16 +19,16 @@ Caption precedence:
   (joy.json is rewritten daily by scripts/update_joy.py, so no extra joy.json
   field is read or required.)
 
-WHEN TO RUN — part of the manual daily share-vertical bake:
-  Run this right after baking public/share-vertical.png + public/fb-share.png,
-  and commit its outputs in the SAME PR. A bake PR therefore contains:
+WHEN IT RUNS — automatically, in the nightly "Daily joy update" workflow
+(.github/workflows/daily.yml), right after scripts/render_share.py bakes
+public/share-vertical.png + public/fb-share.png. The workflow commits
+      public/joy.json (+ archive/recent)
       public/share-vertical.png
       public/fb-share.png
       public/fb/<date>.txt
       public/fb/today.txt
-  Because today.txt ships in the same commit as the image, it can never point
-  at a share-vertical.png that hasn't been baked yet. There is deliberately no
-  GitHub Actions workflow for this.
+in ONE commit, so today.txt can never point at a share-vertical.png that
+hasn't been baked yet. If the render fails, none of the share files change.
 
 Usage:
   python scripts/build_fb_handoff.py              # date = joy.json date
