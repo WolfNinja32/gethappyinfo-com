@@ -11,5 +11,7 @@ Format:
 - Trailing whitespace / blank lines are trimmed and line endings normalised to LF.
 - An empty file is ignored (falls back to joy.json `line`).
 
-Then run `python scripts/build_fb_handoff.py` as part of the share-vertical bake
-and commit `public/fb/<date>.txt` + `public/fb/today.txt` in the same PR as the PNGs.
+The nightly "Daily joy update" workflow (~08:15 UTC = 1:15am PDT / 12:15am PST)
+picks the override up automatically. Commit it **before** that run. If you add or
+change it later, re-run the workflow (Actions → Daily joy update → Run workflow);
+it re-renders because `public/fb/today.txt` is then stale.

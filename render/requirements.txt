@@ -1,0 +1,12 @@
+# Pinned deps for scripts/render_share.py (daily share-vertical.png / fb-share.png).
+# Versions match the environment that produced the manual bakes (byte-identical output).
+# System dependency: libcairo2 (preinstalled on GitHub's ubuntu runners; apt otherwise).
+Pillow==12.3.0
+CairoSVG==2.9.1
+cairocffi==1.7.1
+cffi==2.1.1
+pycparser==3.0
+cssselect2==0.10.1
+tinycss2==1.5.1
+webencodings==0.6.1
+defusedxml==0.7.1

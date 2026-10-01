@@ -14,7 +14,9 @@ data/tasks.txt         Micro-joy pool (one per line; # comments + blanks ignored
 data/recent.json       Rolling 14-day list of shown URLs (cross-day dedup).
 scripts/update_joy.py  The daily updater — Python stdlib only, no dependencies.
 .github/workflows/daily.yml   Daily GitHub Actions cron that runs the updater.
-scripts/build_fb_handoff.py   Facebook handoff text (public/fb/), run during the share-vertical bake.
+scripts/build_fb_handoff.py   Facebook handoff text (public/fb/), run by the daily workflow after the render.
+scripts/render_share.py       Daily share image (public/share-vertical.png + fb-share.png, 1080x1080).
+render/                       Pinned fonts + requirements.txt for render_share.py (not served).
 ```
 
 Once a day, GitHub Actions runs `update_joy.py`, which:
@@ -48,13 +50,41 @@ Image: https://gethappyinfo.com/share-vertical.png
 
 - **Caption:** `fb/captions/<date>.txt` (optional override, repo root, not served;
   see `fb/captions/README.md`), otherwise `public/joy.json` → `line` word for word.
-- **When:** run `python scripts/build_fb_handoff.py` during the manual
-  share-vertical bake, right after the PNGs are generated, and commit
-  `public/fb/<date>.txt` + `public/fb/today.txt` in the **same PR** as
-  `public/share-vertical.png` + `public/fb-share.png`. today.txt therefore
-  never flips before its image ships. Idempotent; `--check` / `--dry-run` available.
+- **When:** automatically, in `.github/workflows/daily.yml`, right after
+  `scripts/render_share.py` bakes `public/share-vertical.png` + `public/fb-share.png`.
+  joy.json, both PNGs, `public/fb/<date>.txt` and `public/fb/today.txt` land in
+  **one commit** (one Cloudflare deploy), so today.txt never flips before its image.
+  Idempotent; `--check` / `--dry-run` available.
 - **Headers:** `public/_headers` serves `/fb/*` as `text/plain; charset=utf-8`
   with `Cache-Control: no-cache`.
+
+## Daily share render (`/share-vertical.png`, `/fb-share.png`)
+
+`scripts/render_share.py` draws the 1080x1080 postcard image from `public/joy.json`
+(line, paragraph, date → postmark "OCT 1", edition number) and the inline
+`<svg class="stamp-svg">` in `public/index.html`. Fonts are pinned in `render/fonts/`
+(fontconfig is pointed only at that folder); Python deps are pinned in
+`render/requirements.txt` (needs system `libcairo2`).
+
+Schedule (all after Pacific midnight year-round):
+
+| Trigger | UTC | Summer (PDT) | Winter (PST) |
+|---|---|---|---|
+| Cloudflare Worker `daily-trigger` (primary, dispatches the workflow; source not in this repo) | 12:00 today → intended 08:15 | 5:00am → 1:15am | 4:00am → 12:15am |
+| GitHub schedule (early) | 08:15 | 1:15am | 12:15am |
+| GitHub schedule (backup) | 09:30 | 2:30am | 1:30am |
+
+The workflow renders only when the card changed (date/line/paragraph/seed), on
+`force`, or when `public/fb/today.txt` is stale. If the render fails, joy.json is
+still committed, the previous image + today.txt stay untouched, and the run is
+marked failed with a job-summary warning. `workflow_dispatch` with `dry_run`
+renders from the checked-out joy.json and uploads the PNGs + today.txt as an
+artifact without committing.
+
+```bash
+pip install -r render/requirements.txt
+python scripts/render_share.py --out-dir /tmp/share   # or no flag to write public/
+```
 
 ## Run / test locally
 
