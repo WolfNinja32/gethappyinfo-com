@@ -15,7 +15,8 @@ data/recent.json       Rolling 14-day list of shown URLs (cross-day dedup).
 scripts/update_joy.py  The daily updater — Python stdlib only, no dependencies.
 .github/workflows/daily.yml   Daily GitHub Actions cron that runs the updater.
 scripts/build_fb_handoff.py   Facebook handoff text (public/fb/), run by the daily workflow after the render.
-scripts/render_share.py       Daily share image (public/share-vertical.png + fb-share.png, 1080x1080).
+scripts/render_share.py       Daily share image (public/share-vertical.png + fb-share.png, 1080x1080) + portrait.
+scripts/render_portrait.py    Daily 1080x1920 portrait postcard (public/art/<date>-portrait.png), called by render_share.py.
 render/                       Pinned fonts + requirements.txt for render_share.py (not served).
 ```
 
@@ -46,7 +47,13 @@ Pass it on ✉
 https://gethappyinfo.com/YYYY-MM-DD
 
 Image: https://gethappyinfo.com/share-vertical.png
+Portrait: https://gethappyinfo.com/art/YYYY-MM-DD-portrait.png
 ```
+
+The `Portrait:` line appears only when `public/art/<date>-portrait.png` exists.
+(The site uses SPA not-found handling, so a missing `/art/...png` would return
+`index.html` with HTTP 200 rather than a 404; consumers should only use URLs
+listed in today.txt.)
 
 - **Caption:** `fb/captions/<date>.txt` (optional override, repo root, not served;
   see `fb/captions/README.md`), otherwise `public/joy.json` → `line` word for word.
@@ -85,6 +92,20 @@ artifact without committing.
 pip install -r render/requirements.txt
 python scripts/render_share.py --out-dir /tmp/share   # or no flag to write public/
 ```
+
+## Daily portrait postcard (`/art/<date>-portrait.png`)
+
+`scripts/render_portrait.py` draws a 1080x1920 portrait version of the site's
+postcard (phone-width single-column layout, Fraunces + IBM Plex Mono, stamp +
+that day's postmark, the line, and the story paragraph). It is rendered by
+`render_share.py` in the same step and committed in the same commit as
+share-vertical.png. Everything except the background stays inside the Reels/Stories
+safe zone (card at x 64–960, y 250–1570: 250px top, 350px bottom, 120px right).
+The paragraph auto-fits 36 → 34 → 32 → 30 → 28px (line 56px, stepping down to 46px
+only if the paragraph is already at 28px). If it still doesn't fit, the render
+fails: no image is written, the previous share images stay, the job summary
+shows the PortraitFitError, and the run fails. Dated files are permanent; only
+the joy.json date's file is ever written.
 
 ## Run / test locally
 
