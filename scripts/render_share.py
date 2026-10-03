@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Render the daily share images: public/share-vertical.png + public/fb-share.png.
+"""Render the daily share images: public/share-vertical.png + public/fb-share.png
++ public/art/<date>-portrait.png (1080x1920, drawn by scripts/render_portrait.py).
 
 Reproducible port of the former manual bake (/workspace/regen_vertical_share.py
 + /workspace/letterbox_1080.py). Pixel logic is unchanged; what changed:
@@ -14,10 +15,15 @@ Reproducible port of the former manual bake (/workspace/regen_vertical_share.py
     are written to temp files first and swapped in with os.replace() only after
     both rendered and passed sanity checks, so a failed render never leaves a
     half-written or mismatched image behind.
+  * The dated portrait postcard public/art/<date>-portrait.png is rendered in
+    the same pass and swapped in with the other two. If its text cannot fit
+    (render_portrait.PortraitFitError) NOTHING is written — the same degrade
+    path as an over-long share-vertical: previous images stay, the job fails.
+    Only <date>'s portrait is ever written; other dates are never touched.
 
 Usage:
-  python scripts/render_share.py                    # writes public/share-vertical.png + public/fb-share.png
-  python scripts/render_share.py --out-dir /tmp/x   # write elsewhere (dry run / CI artifact)
+  python scripts/render_share.py                    # writes public/share-vertical.png, public/fb-share.png, public/art/<date>-portrait.png
+  python scripts/render_share.py --out-dir /tmp/x   # write elsewhere (dry run / CI artifact; portrait in /tmp/x/art/)
   python scripts/render_share.py --joy path/to/joy.json
   python scripts/render_share.py --fingerprint      # hash of render inputs (stdlib only)
 
@@ -369,18 +375,27 @@ def render(joy_path: Path, index_path: Path, out_dir: Path) -> list[Path]:
     if len(data) < 20_000:
         raise RuntimeError(f"rendered PNG suspiciously small ({len(data)} bytes)")
 
+    # Portrait (raises PortraitFitError / RuntimeError before anything is written).
+    import render_portrait
+    portrait, (line_px, para_px) = render_portrait.render_portrait_png(joy, stamp_svg)
+
     out_dir.mkdir(parents=True, exist_ok=True)
-    targets = [out_dir / "share-vertical.png", out_dir / "fb-share.png"]
+    (out_dir / "art").mkdir(exist_ok=True)
+    portrait_path = out_dir / "art" / f"{joy['date']}-portrait.png"
+    targets = [(out_dir / "share-vertical.png", data), (out_dir / "fb-share.png", data),
+               (portrait_path, portrait)]
     tmps = []
-    for t in targets:
+    for t, payload in targets:
         tmp = t.with_name(f".{t.name}.tmp")
-        tmp.write_bytes(data)
+        tmp.write_bytes(payload)
         tmps.append(tmp)
-    for tmp, t in zip(tmps, targets):
+    for tmp, (t, _) in zip(tmps, targets):
         os.replace(tmp, t)
-    print(f"[render_share] {joy['date']}: wrote {', '.join(str(t) for t in targets)} "
+    print(f"[render_share] {joy['date']}: wrote {targets[0][0]}, {targets[1][0]} "
           f"(1080x1080, {len(data)} bytes)")
-    return targets
+    print(f"[render_share] {joy['date']}: wrote {portrait_path} (1080x1920, {len(portrait)} bytes; "
+          f"line {line_px}px, paragraph {para_px}px)")
+    return [t for t, _ in targets]
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -394,7 +409,16 @@ def main(argv: list[str] | None = None) -> int:
     if args.fingerprint:
         print(fingerprint(json.loads(args.joy.read_text(encoding="utf-8"))))
         return 0
-    render(args.joy, args.index, args.out_dir)
+    try:
+        render(args.joy, args.index, args.out_dir)
+    except Exception as e:  # surface in the Actions job summary, then fail
+        msg = f"Share render failed: {type(e).__name__}: {e}"
+        print(f"::error::{msg}", file=sys.stderr)
+        summary = os.environ.get("GITHUB_STEP_SUMMARY")
+        if summary:
+            with open(summary, "a", encoding="utf-8") as fh:
+                fh.write(f"> **⚠️ {msg}**\n\n")
+        raise
     return 0
 
 

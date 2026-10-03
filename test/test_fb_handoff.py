@@ -49,6 +49,54 @@ class FbHandoffTest(unittest.TestCase):
         self.assertEqual(self.read("today.txt"), expected)
         self.assertEqual(self.read("2026-10-01.txt"), expected)
 
+    def touch_portrait(self, date, base=None):
+        art = (base or self.root / "public" / "art")
+        art.mkdir(parents=True, exist_ok=True)
+        (art / f"{date}-portrait.png").write_bytes(b"png")
+
+    def test_portrait_line_after_image_when_file_exists(self):
+        self.touch_portrait("2026-10-01")
+        self.run_build()
+        expected = (f"{LINE}\n\nPass it on ✉\nhttps://gethappyinfo.com/2026-10-01\n\n"
+                    "Image: https://gethappyinfo.com/share-vertical.png\n"
+                    "Portrait: https://gethappyinfo.com/art/2026-10-01-portrait.png\n")
+        self.assertEqual(self.read("today.txt"), expected)
+        self.assertEqual(self.read("2026-10-01.txt"), expected)
+
+    def test_no_portrait_line_without_file_for_that_date(self):
+        self.touch_portrait("2026-09-30")  # another date's portrait doesn't count
+        self.run_build()
+        self.assertNotIn("Portrait:", self.read("today.txt"))
+        self.assertTrue(self.read("today.txt").endswith("share-vertical.png\n"))
+
+    def test_portrait_appearing_makes_check_stale(self):
+        self.run_build()
+        self.assertEqual(self.run_build(check=True), 0)
+        self.touch_portrait("2026-10-01")
+        self.assertEqual(self.run_build(check=True), 1)
+        self.run_build()
+        self.assertEqual(self.run_build(check=True), 0)
+
+    def test_art_dir_override_for_dry_run(self):
+        alt = self.root / "elsewhere" / "art"
+        self.touch_portrait("2026-10-01", base=alt)
+        buf = io.StringIO()
+        with redirect_stderr(io.StringIO()):
+            fb.build(self.root, dry_run=True, out=buf, art_dir=alt)
+        self.assertTrue(buf.getvalue().endswith(
+            "Portrait: https://gethappyinfo.com/art/2026-10-01-portrait.png\n"))
+        buf = io.StringIO()
+        with redirect_stderr(io.StringIO()):
+            fb.build(self.root, dry_run=True, out=buf)  # default public/art has none
+        self.assertNotIn("Portrait:", buf.getvalue())
+
+    def test_backfill_uses_that_dates_portrait(self):
+        self.touch_portrait("2026-09-30")
+        (self.root / "fb" / "captions" / "2026-09-30.txt").write_text("Old caption", encoding="utf-8")
+        self.run_build(date="2026-09-30")
+        self.assertIn("Portrait: https://gethappyinfo.com/art/2026-09-30-portrait.png\n",
+                      self.read("2026-09-30.txt"))
+
     def test_override_file_wins_and_is_normalized(self):
         (self.root / "fb" / "captions" / "2026-10-01.txt").write_bytes(
             "Line one  \r\nLine two\t\r\n\r\n  \r\n".encode("utf-8"))

@@ -57,6 +57,9 @@ class RenderTest(unittest.TestCase):
             self.assertEqual(sv.read_bytes(), fb.read_bytes())
             with Image.open(sv) as im:
                 self.assertEqual(im.size, (1080, 1080))
+            date = json.loads((REPO / "public" / "joy.json").read_text(encoding="utf-8"))["date"]
+            with Image.open(out / "art" / f"{date}-portrait.png") as im:
+                self.assertEqual(im.size, (1080, 1920))
 
     def test_bad_joy_writes_nothing(self):
         with tempfile.TemporaryDirectory() as d:

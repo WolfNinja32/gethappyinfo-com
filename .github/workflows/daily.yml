@@ -70,13 +70,15 @@ jobs:
         id: decide
         run: |
           after=$(python scripts/render_share.py --fingerprint)
+          joy_date=$(python -c 'import json;print(json.load(open("public/joy.json"))["date"])')
           reason=""
           if [[ "$DRY_RUN" == "true" ]]; then reason="dry run"
           elif [[ "$FORCE" == "true" ]]; then reason="force"
           elif [[ "$after" != "${{ steps.before.outputs.fp }}" ]]; then reason="card changed"
           elif ! python scripts/build_fb_handoff.py --check >/dev/null 2>&1; then reason="fb/today.txt stale vs joy.json (earlier render missing/failed)"
+          elif [[ ! -f "public/art/${joy_date}-portrait.png" ]]; then reason="portrait public/art/${joy_date}-portrait.png missing"
           fi
-          echo "joy_date=$(python -c 'import json;print(json.load(open("public/joy.json"))["date"])')" >> "$GITHUB_OUTPUT"
+          echo "joy_date=${joy_date}" >> "$GITHUB_OUTPUT"
           if [[ -n "$reason" ]]; then
             echo "render=true" >> "$GITHUB_OUTPUT"; echo "Render needed: $reason"
           else
@@ -93,9 +95,10 @@ jobs:
           fi
           python -m pip install --disable-pip-version-check -r render/requirements.txt
 
-      # Writes public/share-vertical.png + public/fb-share.png, then public/fb/<date>.txt
-      # + public/fb/today.txt. Any failure restores all four to HEAD so the previous
-      # image and today.txt stay untouched (joy.json is still committed below).
+      # Writes public/share-vertical.png + public/fb-share.png + public/art/<date>-portrait.png,
+      # then public/fb/<date>.txt + public/fb/today.txt. Any failure (incl. a portrait whose
+      # story paragraph can't fit at the minimum font size) restores all of them to HEAD so
+      # the previous images and today.txt stay untouched (joy.json is still committed below).
       - name: Render share images + FB handoff
         id: render
         if: steps.decide.outputs.render == 'true' && env.DRY_RUN != 'true' && steps.deps.outcome == 'success'
@@ -103,9 +106,10 @@ jobs:
         run: |
           set -euo pipefail
           restore() {
-            echo "::error::Share render failed; restoring previous share images and fb/ text"
+            echo "::error::Share render failed; restoring previous share images, portrait and fb/ text"
             git checkout -- public/share-vertical.png public/fb-share.png public/fb/ || true
-            git clean -fdq -- public/fb/ || true
+            git checkout -- public/art/ 2>/dev/null || true
+            git clean -fdq -- public/fb/ public/art/ || true
           }
           trap restore ERR
           python scripts/render_share.py
@@ -118,8 +122,8 @@ jobs:
         run: |
           set -euo pipefail
           out="$RUNNER_TEMP/share-render"
-          python scripts/render_share.py --out-dir "$out"
-          python scripts/build_fb_handoff.py --dry-run > "$out/today.txt"
+          python scripts/render_share.py --out-dir "$out" | tee "$RUNNER_TEMP/render.log"
+          python scripts/build_fb_handoff.py --dry-run --art-dir "$out/art" > "$out/today.txt"
           new=$(sha256sum "$out/share-vertical.png" | cut -d' ' -f1)
           repo=$(sha256sum public/share-vertical.png | cut -d' ' -f1)
           {
@@ -127,6 +131,7 @@ jobs:
             echo "- rendered share-vertical.png sha256: \`$new\`"
             echo "- committed public/share-vertical.png sha256: \`$repo\`"
             if [[ "$new" == "$repo" ]]; then echo "- **byte-identical** to the committed image"; else echo "- differs from the committed image (inspect the artifact)"; fi
+            echo "- portrait: \`$(grep -o 'art/.*portrait.png.*' "$RUNNER_TEMP/render.log" | head -1)\`"
             echo '```'; cat "$out/today.txt"; echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -150,7 +155,7 @@ jobs:
                           public/story public/kindness"
           # Share outputs: only when the render step fully succeeded, so image,
           # today.txt and joy.json flip together in ONE commit (one deploy).
-          SHARE_PATHS="public/share-vertical.png public/fb-share.png public/fb"
+          SHARE_PATHS="public/share-vertical.png public/fb-share.png public/fb public/art"
           git add $CORE_PATHS
           for path in $OPTIONAL_PATHS; do
             [[ -e "$path" ]] && git add "$path" || true
@@ -172,13 +177,13 @@ jobs:
             echo "### Daily joy update (${{ steps.decide.outputs.joy_date }})"
             echo "- render needed: ${{ steps.decide.outputs.render }}"
             echo "- render deps: ${{ steps.deps.outcome || 'skipped' }}"
-            echo "- share render + fb handoff: ${{ steps.render.outcome || 'skipped' }}"
+            echo "- share render (share-vertical, fb-share, art/<date>-portrait) + fb handoff: ${{ steps.render.outcome || 'skipped' }}"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Fail visibly if the share render failed
         if: steps.decide.outputs.render == 'true' && env.DRY_RUN != 'true' && steps.render.outcome != 'success'
         run: |
-          msg="Share render did not complete (deps: ${{ steps.deps.outcome }}, render: ${{ steps.render.outcome }}). joy.json was committed; share-vertical.png, fb-share.png and /fb/today.txt still show the PREVIOUS day. Fix and re-run this workflow (workflow_dispatch) — it will re-render because today.txt is stale."
+          msg="Share render did not complete (deps: ${{ steps.deps.outcome }}, render: ${{ steps.render.outcome }}). joy.json was committed; share-vertical.png, fb-share.png and /fb/today.txt still show the PREVIOUS day and no art/<date>-portrait.png was published (if the log says PortraitFitError, the story paragraph is too long for the portrait card even at the minimum font size). Fix and re-run this workflow (workflow_dispatch) — it will re-render because today.txt is stale."
           echo "::error::$msg"
           echo "> **⚠️ $msg**" >> "$GITHUB_STEP_SUMMARY"
           exit 1

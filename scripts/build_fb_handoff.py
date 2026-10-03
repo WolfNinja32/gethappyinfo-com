@@ -10,6 +10,14 @@ Format (UTF-8, LF, exactly one trailing newline):
     https://gethappyinfo.com/YYYY-MM-DD
 
     Image: https://gethappyinfo.com/share-vertical.png
+    Portrait: https://gethappyinfo.com/art/YYYY-MM-DD-portrait.png
+
+The Portrait line is included ONLY when public/art/<date>-portrait.png exists
+(rendered by scripts/render_share.py in the same step). The site serves assets
+with not_found_handling = "single-page-application" (wrangler.jsonc), so a
+missing /art/ file would come back as index.html with HTTP 200, not a 404;
+gating the line on the file existing means consumers never get that URL for a
+portrait that wasn't baked.
 
 Caption precedence:
   1. fb/captions/<date>.txt at the repo root (NOT served), if it exists and is
@@ -25,6 +33,7 @@ public/share-vertical.png + public/fb-share.png. The workflow commits
       public/joy.json (+ archive/recent)
       public/share-vertical.png
       public/fb-share.png
+      public/art/<date>-portrait.png
       public/fb/<date>.txt
       public/fb/today.txt
 in ONE commit, so today.txt can never point at a share-vertical.png that
@@ -35,6 +44,8 @@ Usage:
   python scripts/build_fb_handoff.py --date YYYY-MM-DD
   python scripts/build_fb_handoff.py --check      # exit 1 if outputs are stale
   python scripts/build_fb_handoff.py --dry-run    # print text, write nothing
+  python scripts/build_fb_handoff.py --dry-run --art-dir /tmp/x/art
+                                                  # look for the portrait elsewhere (CI dry run)
 
 Rules:
   * Idempotent: files are only rewritten when their content changes.
@@ -71,11 +82,18 @@ def normalize(text: str) -> str:
     return "\n".join(lines)
 
 
-def render(caption: str, date: str) -> str:
+def portrait_url(date: str) -> str:
+    return f"{SITE}/art/{date}-portrait.png"
+
+
+def render(caption: str, date: str, portrait: bool = False) -> str:
     body = normalize(caption)
     if not body:
         raise ValueError("empty caption")
-    return f"{body}\n\n{SIGN_OFF}\n{SITE}/{date}\n\nImage: {IMAGE_URL}\n"
+    text = f"{body}\n\n{SIGN_OFF}\n{SITE}/{date}\n\nImage: {IMAGE_URL}\n"
+    if portrait:
+        text += f"Portrait: {portrait_url(date)}\n"
+    return text
 
 
 def load_joy(repo: Path) -> dict:
@@ -101,7 +119,7 @@ def resolve_caption(repo: Path, date: str, joy: dict) -> tuple[str, str]:
 
 
 def build(repo: Path, date: str | None = None, check: bool = False,
-          dry_run: bool = False, out=sys.stdout) -> int:
+          dry_run: bool = False, out=sys.stdout, art_dir: Path | None = None) -> int:
     joy = load_joy(repo)
     joy_date = joy.get("date")
     date = date or joy_date
@@ -115,7 +133,9 @@ def build(repo: Path, date: str | None = None, check: bool = False,
               file=sys.stderr)
 
     caption, source = resolve_caption(repo, date, joy)
-    text = render(caption, date)
+    art_dir = art_dir if art_dir is not None else repo / "public" / "art"
+    has_portrait = (art_dir / f"{date}-portrait.png").is_file()
+    text = render(caption, date, portrait=has_portrait)
 
     fb_dir = repo / "public" / "fb"
     targets = [fb_dir / f"{date}.txt"]
@@ -160,8 +180,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--date", help="YYYY-MM-DD (default: public/joy.json date)")
     ap.add_argument("--check", action="store_true", help="exit 1 if outputs are stale; write nothing")
     ap.add_argument("--dry-run", action="store_true", help="print the text; write nothing")
+    ap.add_argument("--art-dir", type=Path, default=None,
+                    help="where to look for <date>-portrait.png (default: public/art)")
     args = ap.parse_args(argv)
-    return build(REPO, args.date, check=args.check, dry_run=args.dry_run)
+    return build(REPO, args.date, check=args.check, dry_run=args.dry_run, art_dir=args.art_dir)
 
 
 if __name__ == "__main__":
