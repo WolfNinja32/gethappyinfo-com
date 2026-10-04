@@ -96,7 +96,8 @@ jobs:
           python -m pip install --disable-pip-version-check -r render/requirements.txt
 
       # Writes public/share-vertical.png + public/fb-share.png + public/art/<date>-portrait.png,
-      # then public/fb/<date>.txt + public/fb/today.txt. Any failure (incl. a portrait whose
+      # then public/fb/<date>.txt + public/fb/today.txt (+ <date>.reel.txt / today.reel.txt
+      # when the portrait exists). Any failure (incl. a portrait whose
       # story paragraph can't fit at the minimum font size) restores all of them to HEAD so
       # the previous images and today.txt stay untouched (joy.json is still committed below).
       - name: Render share images + FB handoff
@@ -123,7 +124,7 @@ jobs:
           set -euo pipefail
           out="$RUNNER_TEMP/share-render"
           python scripts/render_share.py --out-dir "$out" | tee "$RUNNER_TEMP/render.log"
-          python scripts/build_fb_handoff.py --dry-run --art-dir "$out/art" > "$out/today.txt"
+          python scripts/build_fb_handoff.py --dry-run --art-dir "$out/art" --reel-out "$out/today.reel.txt" > "$out/today.txt"
           new=$(sha256sum "$out/share-vertical.png" | cut -d' ' -f1)
           repo=$(sha256sum public/share-vertical.png | cut -d' ' -f1)
           {
@@ -133,6 +134,11 @@ jobs:
             if [[ "$new" == "$repo" ]]; then echo "- **byte-identical** to the committed image"; else echo "- differs from the committed image (inspect the artifact)"; fi
             echo "- portrait: \`$(grep -o 'art/.*portrait.png.*' "$RUNNER_TEMP/render.log" | head -1)\`"
             echo '```'; cat "$out/today.txt"; echo '```'
+            if [[ -f "$out/today.reel.txt" ]]; then
+              echo "today.reel.txt:"; echo '```'; cat "$out/today.reel.txt"; echo '```'
+            else
+              echo "- no today.reel.txt (no portrait → no reel caption)"
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload dry-run artifact
