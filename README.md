@@ -117,8 +117,8 @@ The workflow renders only when the card changed (date/line/paragraph/seed), on
 still committed, the previous image + today.txt stay untouched, and the run is
 marked failed with a job-summary warning. `workflow_dispatch` with `dry_run`
 renders from the checked-out joy.json and uploads the PNGs (incl. `art/<date>-portrait.png`
-and, if it rendered, `art/<date>-landscape.png`) + today.txt (+ today.reel.txt) as an
-artifact without committing.
+and, if it rendered, `art/<date>-landscape.png`) + today.txt (+ today.reel.txt) + the
+dated share page (`<date>.html` link-preview tags) as an artifact without committing.
 
 ```bash
 pip install -r render/requirements.txt
@@ -171,12 +171,52 @@ the portrait's brand-red handling (premultiplied rotation, blended alpha fills).
   stays green and share-vertical / fb-share / portrait / reel / today.txt are
   committed exactly as the share step produced them. The landscape never triggers
   a re-render on its own; to retry, run the workflow with `force`.
-- **Not used for** the FB photo post (`Image:` stays share-vertical.png) or
-  `og:image`.
+- **Not used for** the FB photo post (`Image:` stays share-vertical.png).
+- **Used for** dated share-page link previews (`public/<date>.html` → `/<date>`):
+  see below.
 
 ```bash
 python scripts/render_landscape.py --out /tmp/landscape.png   # from public/joy.json
 python scripts/render_landscape.py --joy some/joy.json --out-dir /tmp/x   # → /tmp/x/art/<date>-landscape.png
+```
+
+## Dated share pages (`/<YYYY-MM-DD>` link-preview tags)
+
+`today.txt` (and the site's Send button) share `https://gethappyinfo.com/YYYY-MM-DD`.
+The deploy is Cloudflare Workers static assets of `public/` (`wrangler.jsonc`, no
+worker script) with `not_found_handling = "single-page-application"`, so a dated
+URL with no file behind it returns the homepage `index.html` (HTTP 200) with the
+homepage's `og:*` tags. Crawlers don't run JS, so per-day tags have to live in the
+HTML returned for that URL.
+
+`scripts/build_og_page.py` copies `public/index.html` and only swaps the
+`og:*` / `twitter:*` `<meta>` block in `<head>`, writing `public/<date>.html`.
+With Workers' default `html_handling` (`auto-trailing-slash`), that file is served
+at `/<date>` with HTTP 200 and no redirect. The page's JS already reads the date
+from the path and loads that day from `/joy-archive.json` — same as today's SPA
+fallback. **Homepage tags are never touched.**
+
+| Tag | Value |
+|---|---|
+| `og:title` | that day's line (`joy.json` / `joy-archive.json`), word for word |
+| `og:description` | `Pass it on ✉` (same sign-off as `today.txt`) |
+| `og:url` | `https://gethappyinfo.com/<date>` |
+| `og:image` | `https://gethappyinfo.com/art/<date>-landscape.png` when that file exists, is a valid 1200×630 PNG, and (in the nightly commit) is staged/tracked with those bytes; otherwise `https://gethappyinfo.com/og-image.png` |
+| `og:image:width` / `:height` | `1200` / `630` (or the fallback file's real size) |
+| `twitter:card` | `summary_large_image` |
+| `twitter:image` | same as `og:image` |
+
+If the day has no line, title/description stay whatever `index.html` already has
+(nothing is invented). The nightly **Commit if changed** step bakes the page
+*after* staging share/landscape outputs (`--git-index`); a bake failure only
+warns and never blocks joy.json / share / portrait / today.txt. Dry-run includes
+the dated page (plus an `og-fallback/` variant) in the artifact.
+
+```bash
+python scripts/build_og_page.py --date 2026-10-04          # public/2026-10-04.html
+python scripts/build_og_page.py --out-dir /tmp/x --art-dir /tmp/x/art
+python scripts/build_og_page.py --check                   # exit 1 if stale
+python -m unittest test.test_og_page
 ```
 
 ## Run / test locally
