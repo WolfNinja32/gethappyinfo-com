@@ -117,6 +117,19 @@ jobs:
           python scripts/build_fb_handoff.py
           python scripts/build_fb_handoff.py --check
 
+      # Optional 1200x630 landscape postcard (public/art/<date>-landscape.png), its OWN
+      # step so it can never block, fail or roll back the share render above: only runs
+      # after that step fully succeeded; on success it adds the Landscape: line to
+      # today.txt (rebuilding fb text); on failure scripts/landscape_step.sh deletes the
+      # landscape file, rebuilds today.txt WITHOUT the line, warns in the job summary and
+      # exits 1 — continue-on-error keeps the run green and the rest of the commit intact.
+      - name: Render landscape postcard (optional)
+        id: landscape
+        if: steps.render.outcome == 'success'
+        continue-on-error: true
+        timeout-minutes: 5
+        run: bash scripts/landscape_step.sh
+
       - name: Render (dry run → artifact)
         id: render_dry
         if: steps.decide.outputs.render == 'true' && env.DRY_RUN == 'true'
@@ -124,6 +137,12 @@ jobs:
           set -euo pipefail
           out="$RUNNER_TEMP/share-render"
           python scripts/render_share.py --out-dir "$out" | tee "$RUNNER_TEMP/render.log"
+          # landscape is optional here too: a failure only warns (nothing written for it)
+          if python scripts/render_landscape.py --out-dir "$out" | tee -a "$RUNNER_TEMP/render.log"; then
+            landscape="\`$(grep -o 'art/.*landscape.png.*' "$RUNNER_TEMP/render.log" | head -1)\`"
+          else
+            landscape="**failed — skipped** (no landscape file, no Landscape: line; see warning)"
+          fi
           python scripts/build_fb_handoff.py --dry-run --art-dir "$out/art" --reel-out "$out/today.reel.txt" > "$out/today.txt"
           new=$(sha256sum "$out/share-vertical.png" | cut -d' ' -f1)
           repo=$(sha256sum public/share-vertical.png | cut -d' ' -f1)
@@ -133,6 +152,7 @@ jobs:
             echo "- committed public/share-vertical.png sha256: \`$repo\`"
             if [[ "$new" == "$repo" ]]; then echo "- **byte-identical** to the committed image"; else echo "- differs from the committed image (inspect the artifact)"; fi
             echo "- portrait: \`$(grep -o 'art/.*portrait.png.*' "$RUNNER_TEMP/render.log" | head -1)\`"
+            echo "- landscape: ${landscape}"
             echo '```'; cat "$out/today.txt"; echo '```'
             if [[ -f "$out/today.reel.txt" ]]; then
               echo "today.reel.txt:"; echo '```'; cat "$out/today.reel.txt"; echo '```'
@@ -161,6 +181,8 @@ jobs:
                           public/story public/kindness"
           # Share outputs: only when the render step fully succeeded, so image,
           # today.txt and joy.json flip together in ONE commit (one deploy).
+          # public/art also carries art/<date>-landscape.png iff the landscape step
+          # succeeded (on failure that step already deleted it and dropped the line).
           SHARE_PATHS="public/share-vertical.png public/fb-share.png public/fb public/art"
           git add $CORE_PATHS
           for path in $OPTIONAL_PATHS; do
@@ -184,6 +206,7 @@ jobs:
             echo "- render needed: ${{ steps.decide.outputs.render }}"
             echo "- render deps: ${{ steps.deps.outcome || 'skipped' }}"
             echo "- share render (share-vertical, fb-share, art/<date>-portrait) + fb handoff: ${{ steps.render.outcome || 'skipped' }}"
+            echo "- landscape (art/<date>-landscape, optional): ${{ steps.landscape.outcome || 'skipped' }}"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Fail visibly if the share render failed
