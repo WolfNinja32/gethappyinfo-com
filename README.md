@@ -48,6 +48,7 @@ https://gethappyinfo.com/YYYY-MM-DD
 
 Image: https://gethappyinfo.com/share-vertical.png
 Portrait: https://gethappyinfo.com/art/YYYY-MM-DD-portrait.png
+Landscape: https://gethappyinfo.com/art/YYYY-MM-DD-landscape.png
 
 Reel caption:
 <reel caption, one or more lines (may include blank lines), through end of file>
@@ -58,6 +59,11 @@ and the `Reel caption:` section appears only together with it (no portrait → n
 reel). The reel section is always **last**: everything after the `Reel caption:`
 line up to end of file is the reel caption, so parsers should split on the first
 `Reel caption:` line. All lines above it are unchanged from the photo format.
+The `Landscape:` line appears only when `public/art/<date>-landscape.png` exists
+(it ships in the same commit), always directly after the `Portrait:` line and
+before the blank line + `Reel caption:` block (after `Image:` on a day with no
+portrait). It is optional: on a day the landscape render fails, the line is simply
+absent and everything else is identical.
 (The site uses SPA not-found handling, so a missing `/art/...png` would return
 `index.html` with HTTP 200 rather than a 404; consumers should only use URLs
 listed in today.txt.)
@@ -110,7 +116,8 @@ The workflow renders only when the card changed (date/line/paragraph/seed), on
 `force`, or when `public/fb/today.txt` is stale. If the render fails, joy.json is
 still committed, the previous image + today.txt stay untouched, and the run is
 marked failed with a job-summary warning. `workflow_dispatch` with `dry_run`
-renders from the checked-out joy.json and uploads the PNGs + today.txt (+ today.reel.txt) as an
+renders from the checked-out joy.json and uploads the PNGs (incl. `art/<date>-portrait.png`
+and, if it rendered, `art/<date>-landscape.png`) + today.txt (+ today.reel.txt) as an
 artifact without committing.
 
 ```bash
@@ -132,11 +139,52 @@ fails: no image is written, the previous share images stay, the job summary
 shows the PortraitFitError, and the run fails. Dated files are permanent; only
 the joy.json date's file is ever written.
 
+## Daily landscape postcard (`/art/<date>-landscape.png`)
+
+`scripts/render_landscape.py` draws a 1200x630 landscape version of the site's
+postcard in its **desktop** layout (`public/index.html` without the ≤620px rules):
+header row (POST · CARD, Get Happy Info*.com*, subtitle | the index.html stamp with
+that day's postmark), double ocean rule, then the two-column `.letter` grid
+(`1fr | dashed divider | 1.2fr`): *a note to you* / Dear friend / the line / Yours in
+joy ~ Get Happy on the left, *a little more* + the story paragraph on the right,
+and the `GETHAPPYINFO.COM · NO. NNN` footer with the ✉ PASS IT ON ↗ badge. It reuses
+the portrait/share helpers: pinned fonts, palette, stamp extraction, postmark, and
+the portrait's brand-red handling (premultiplied rotation, blended alpha fills).
+
+- **Source line:** plain text under the paragraph, `Source: <seed.sourceTitle> ·
+  <domain of seed.sourceUrl>` (either part alone if only one exists; omitted when
+  neither does). Never invented; wraps, never truncated.
+- **Auto-fit:** the paragraph steps 21 → 20 → 19 → 18 → 17 → 16px; the line
+  (34px) steps down to 26px only if the note column itself overflows. Nothing is
+  cut off: if it still can't fit, `LandscapeFitError` → the failure path below.
+  Across the archive (2026-09-04 … 2026-10-04) the line always stays 34px and the
+  longest story (2026-09-22, 637 chars) is the only day at 16px.
+- **Safe margins:** all text/stamp/postmark stays inside the card's inner box
+  (≥ 70px from the left/right edges, ≥ 30px from top/bottom); only the table
+  background and card shadow reach the edges.
+- **Isolated workflow step:** `Render landscape postcard (optional)` runs
+  `scripts/landscape_step.sh` only after the share render step succeeded, with
+  `continue-on-error`. Success: writes the PNG (atomically) and rebuilds
+  `public/fb/<date>.txt` / `today.txt` with the `Landscape:` line. Failure (any
+  reason, incl. `LandscapeFitError`): deletes that date's landscape file, rebuilds
+  the fb text without the line, adds a ⚠️ warning to the job summary; the run
+  stays green and share-vertical / fb-share / portrait / reel / today.txt are
+  committed exactly as the share step produced them. The landscape never triggers
+  a re-render on its own; to retry, run the workflow with `force`.
+- **Not used for** the FB photo post (`Image:` stays share-vertical.png) or
+  `og:image`.
+
+```bash
+python scripts/render_landscape.py --out /tmp/landscape.png   # from public/joy.json
+python scripts/render_landscape.py --joy some/joy.json --out-dir /tmp/x   # → /tmp/x/art/<date>-landscape.png
+```
+
 ## Run / test locally
 
 ```bash
 python scripts/update_joy.py          # refresh public/joy.json from the live feed
 python -m http.server -d public 8000  # then open http://localhost:8000
+python -m unittest discover -s test -t .   # full suite (render tests need render/requirements.txt)
 ```
 
 ## Deploy notes (one-time, owner-side)

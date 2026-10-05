@@ -11,9 +11,18 @@ Format (UTF-8, LF, exactly one trailing newline):
 
     Image: https://gethappyinfo.com/share-vertical.png
     Portrait: https://gethappyinfo.com/art/YYYY-MM-DD-portrait.png
+    Landscape: https://gethappyinfo.com/art/YYYY-MM-DD-landscape.png
 
     Reel caption:
     <reel caption block, one or more lines, through end of file>
+
+The Landscape line (1200x630 postcard, scripts/render_landscape.py) is included
+ONLY when public/art/<date>-landscape.png exists, independently of the others; it
+always sits directly after the Portrait line (after the Image line on a day with no
+portrait), before the blank line and the Reel caption section. The landscape is
+rendered in its OWN workflow step after this file was first built; on success the
+step rebuilds today.txt so the line appears, on failure it deletes the landscape
+file so the line is omitted and nothing else changes.
 
 The Portrait line and the Reel caption section are included ONLY when
 public/art/<date>-portrait.png exists (no portrait -> no reel). The Reel caption
@@ -56,6 +65,7 @@ public/share-vertical.png + public/fb-share.png. The workflow commits
       public/share-vertical.png
       public/fb-share.png
       public/art/<date>-portrait.png
+      public/art/<date>-landscape.png   (only if the separate landscape step succeeded)
       public/fb/<date>.txt
       public/fb/today.txt
       public/fb/<date>.reel.txt
@@ -116,14 +126,21 @@ def portrait_url(date: str) -> str:
     return f"{SITE}/art/{date}-portrait.png"
 
 
+def landscape_url(date: str) -> str:
+    return f"{SITE}/art/{date}-landscape.png"
+
+
 def render(caption: str, date: str, portrait: bool = False,
-           reel: str | None = None) -> str:
+           reel: str | None = None, landscape: bool = False) -> str:
     body = normalize(caption)
     if not body:
         raise ValueError("empty caption")
     text = f"{body}\n\n{SIGN_OFF}\n{SITE}/{date}\n\nImage: {IMAGE_URL}\n"
     if portrait:
         text += f"Portrait: {portrait_url(date)}\n"
+    if landscape:
+        text += f"Landscape: {landscape_url(date)}\n"
+    if portrait:
         if reel is not None:
             text += f"\n{REEL_HEADER}\n{render_reel(reel)}"
     elif reel is not None:
@@ -197,10 +214,11 @@ def build(repo: Path, date: str | None = None, check: bool = False,
     caption, source = resolve_caption(repo, date, joy)
     art_dir = art_dir if art_dir is not None else repo / "public" / "art"
     has_portrait = (art_dir / f"{date}-portrait.png").is_file()
+    has_landscape = (art_dir / f"{date}-landscape.png").is_file()
     reel = reel_source = None
     if has_portrait:
         reel, reel_source = resolve_reel_caption(repo, date, joy)
-    text = render(caption, date, portrait=has_portrait, reel=reel)
+    text = render(caption, date, portrait=has_portrait, reel=reel, landscape=has_landscape)
     reel_text = render_reel(reel) if reel is not None else None
 
     fb_dir = repo / "public" / "fb"
@@ -268,7 +286,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--check", action="store_true", help="exit 1 if outputs are stale; write nothing")
     ap.add_argument("--dry-run", action="store_true", help="print the text; write nothing")
     ap.add_argument("--art-dir", type=Path, default=None,
-                    help="where to look for <date>-portrait.png (default: public/art)")
+                    help="where to look for <date>-portrait.png / <date>-landscape.png (default: public/art)")
     ap.add_argument("--reel-out", type=Path, default=None,
                     help="with --dry-run: also write the standalone reel caption to this file")
     args = ap.parse_args(argv)

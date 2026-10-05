@@ -250,5 +250,77 @@ class FbHandoffTest(unittest.TestCase):
         self.assertFalse((self.root / "public" / "fb").exists())
 
 
+
+class LandscapeLineTest(unittest.TestCase):
+    """The Landscape: line (1200x630 art/<date>-landscape.png)."""
+    setUp, tearDown, write_joy, run_build, read, touch_portrait, exists = (
+        FbHandoffTest.setUp, FbHandoffTest.tearDown, FbHandoffTest.write_joy,
+        FbHandoffTest.run_build, FbHandoffTest.read, FbHandoffTest.touch_portrait,
+        FbHandoffTest.exists)
+    LS = "Landscape: https://gethappyinfo.com/art/2026-10-01-landscape.png\n"
+
+    def touch_landscape(self, date, base=None):
+        art = (base or self.root / "public" / "art")
+        art.mkdir(parents=True, exist_ok=True)
+        (art / f"{date}-landscape.png").write_bytes(b"png")
+
+    def test_landscape_directly_after_portrait_before_reel_block(self):
+        self.touch_portrait("2026-10-01")
+        self.touch_landscape("2026-10-01")
+        self.run_build()
+        expected = PORTRAIT_TXT + self.LS + "\nReel caption:\n" + REEL
+        self.assertEqual(self.read("today.txt"), expected)
+        self.assertEqual(self.read("2026-10-01.txt"), expected)
+        lines = self.read("today.txt").split("\n")
+        i = lines.index(self.LS.strip())
+        self.assertTrue(lines[i - 1].startswith("Portrait: "))
+        self.assertEqual(lines[i + 1], "")
+        self.assertEqual(lines[i + 2], "Reel caption:")
+        # reel caption outputs are unchanged by the landscape
+        self.assertEqual(self.read("today.reel.txt"), REEL)
+        head, _, reel = self.read("today.txt").partition("\nReel caption:\n")
+        self.assertEqual(reel, REEL)
+
+    def test_no_landscape_file_no_line(self):
+        self.touch_portrait("2026-10-01")
+        self.run_build()
+        self.assertNotIn("Landscape:", self.read("today.txt"))
+        self.assertEqual(self.read("today.txt"), PORTRAIT_TXT + "\nReel caption:\n" + REEL)
+
+    def test_other_dates_landscape_does_not_count(self):
+        self.touch_portrait("2026-10-01")
+        self.touch_landscape("2026-09-30")
+        self.run_build()
+        self.assertNotIn("Landscape:", self.read("today.txt"))
+
+    def test_landscape_without_portrait_follows_image(self):
+        self.touch_landscape("2026-10-01")
+        self.run_build()
+        self.assertEqual(self.read("today.txt"),
+                         f"{LINE}\n\nPass it on ✉\nhttps://gethappyinfo.com/2026-10-01\n\n"
+                         "Image: https://gethappyinfo.com/share-vertical.png\n" + self.LS)
+        self.assertFalse(self.exists("today.reel.txt"))
+
+    def test_line_disappears_when_file_removed(self):
+        # landscape failure path: file deleted, rebuild drops the line, rest identical
+        self.touch_portrait("2026-10-01")
+        self.touch_landscape("2026-10-01")
+        self.run_build()
+        (self.root / "public" / "art" / "2026-10-01-landscape.png").unlink()
+        self.assertEqual(self.run_build(check=True), 1)  # stale: line must go
+        self.run_build()
+        self.assertEqual(self.read("today.txt"), PORTRAIT_TXT + "\nReel caption:\n" + REEL)
+        self.assertEqual(self.run_build(check=True), 0)
+
+    def test_art_dir_override_finds_landscape_for_dry_run(self):
+        other = self.root / "elsewhere" / "art"
+        self.touch_portrait("2026-10-01", base=other)
+        self.touch_landscape("2026-10-01", base=other)
+        buf = io.StringIO()
+        with redirect_stderr(io.StringIO()):
+            fb.build(self.root, dry_run=True, out=buf, art_dir=other)
+        self.assertEqual(buf.getvalue(), PORTRAIT_TXT + self.LS + "\nReel caption:\n" + REEL)
+        self.assertFalse((self.root / "public" / "fb").exists())
+
 if __name__ == "__main__":
     unittest.main()
