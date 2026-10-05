@@ -48,18 +48,43 @@ https://gethappyinfo.com/YYYY-MM-DD
 
 Image: https://gethappyinfo.com/share-vertical.png
 Portrait: https://gethappyinfo.com/art/YYYY-MM-DD-portrait.png
+
+Reel caption:
+<reel caption, one or more lines (may include blank lines), through end of file>
 ```
 
-The `Portrait:` line appears only when `public/art/<date>-portrait.png` exists.
+The `Portrait:` line appears only when `public/art/<date>-portrait.png` exists,
+and the `Reel caption:` section appears only together with it (no portrait → no
+reel). The reel section is always **last**: everything after the `Reel caption:`
+line up to end of file is the reel caption, so parsers should split on the first
+`Reel caption:` line. All lines above it are unchanged from the photo format.
 (The site uses SPA not-found handling, so a missing `/art/...png` would return
 `index.html` with HTTP 200 rather than a 404; consumers should only use URLs
 listed in today.txt.)
 
 - **Caption:** `fb/captions/<date>.txt` (optional override, repo root, not served;
   see `fb/captions/README.md`), otherwise `public/joy.json` → `line` word for word.
+- **Reel caption:** `fb/captions/<date>.reel.txt` (optional override, same folder,
+  same trimming rules, used verbatim), otherwise:
+
+  ```
+  <public/joy.json line>
+
+  Send this to someone who needs it today ✉
+
+  #kindness #gethappy
+  ```
+
+  Also written standalone (caption only, one trailing newline) to
+  `public/fb/<date>.reel.txt` and `public/fb/today.reel.txt`
+  (`https://gethappyinfo.com/fb/today.reel.txt`). If the joy.json date has no
+  portrait, a leftover `today.reel.txt` is deleted so it never shows a previous day.
+  No text is ever invented: if there is no reel override and joy.json has no
+  `line` for that date, the build fails (same as the photo caption).
 - **When:** automatically, in `.github/workflows/daily.yml`, right after
   `scripts/render_share.py` bakes `public/share-vertical.png` + `public/fb-share.png`.
-  joy.json, both PNGs, `public/fb/<date>.txt` and `public/fb/today.txt` land in
+  joy.json, the PNGs, `public/fb/<date>.txt`, `public/fb/today.txt` and the
+  `.reel.txt` files land in
   **one commit** (one Cloudflare deploy), so today.txt never flips before its image.
   Idempotent; `--check` / `--dry-run` available.
 - **Headers:** `public/_headers` serves `/fb/*` as `text/plain; charset=utf-8`
@@ -85,7 +110,7 @@ The workflow renders only when the card changed (date/line/paragraph/seed), on
 `force`, or when `public/fb/today.txt` is stale. If the render fails, joy.json is
 still committed, the previous image + today.txt stay untouched, and the run is
 marked failed with a job-summary warning. `workflow_dispatch` with `dry_run`
-renders from the checked-out joy.json and uploads the PNGs + today.txt as an
+renders from the checked-out joy.json and uploads the PNGs + today.txt (+ today.reel.txt) as an
 artifact without committing.
 
 ```bash
