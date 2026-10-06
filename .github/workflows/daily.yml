@@ -144,6 +144,12 @@ jobs:
             landscape="**failed — skipped** (no landscape file, no Landscape: line; see warning)"
           fi
           python scripts/build_fb_handoff.py --dry-run --art-dir "$out/art" --reel-out "$out/today.reel.txt" > "$out/today.txt"
+          # dated share page /<date> (link-preview tags); the fallback variant shows what a
+          # landscape failure would publish. Optional here too: a failure only warns.
+          d="${{ steps.decide.outputs.joy_date }}"
+          og_mode=$(python scripts/build_og_page.py --date "$d" --out-dir "$out" --art-dir "$out/art") \
+            && python scripts/build_og_page.py --date "$d" --out-dir "$out/og-fallback" --no-landscape >/dev/null \
+            || og_mode="**failed** (see warning)"
           new=$(sha256sum "$out/share-vertical.png" | cut -d' ' -f1)
           repo=$(sha256sum public/share-vertical.png | cut -d' ' -f1)
           {
@@ -153,6 +159,10 @@ jobs:
             if [[ "$new" == "$repo" ]]; then echo "- **byte-identical** to the committed image"; else echo "- differs from the committed image (inspect the artifact)"; fi
             echo "- portrait: \`$(grep -o 'art/.*portrait.png.*' "$RUNNER_TEMP/render.log" | head -1)\`"
             echo "- landscape: ${landscape}"
+            echo "- dated page \`${d}.html\`: ${og_mode}"
+            if [[ -f "$out/${d}.html" ]]; then
+              echo '```html'; grep -E '<meta (property|name)="(og|twitter):' "$out/${d}.html"; echo '```'
+            fi
             echo '```'; cat "$out/today.txt"; echo '```'
             if [[ -f "$out/today.reel.txt" ]]; then
               echo "today.reel.txt:"; echo '```'; cat "$out/today.reel.txt"; echo '```'
@@ -191,6 +201,20 @@ jobs:
           if [[ "${{ steps.render.outcome }}" == "success" ]]; then
             git add $SHARE_PATHS
           fi
+          # Dated share page public/<date>.html (served at /<date>, the URL today.txt
+          # links): index.html with per-day og:/twitter: tags. Baked AFTER staging so
+          # --git-index only uses the landscape image if art/<date>-landscape.png is
+          # staged/tracked with the validated bytes (ships in THIS commit); otherwise
+          # the fallback og:image. Also refreshes existing dated pages from the current
+          # index.html. Never blocks the commit: a failure only warns.
+          if og_log=$(python scripts/build_og_page.py --git-index); then
+            echo "$og_log"
+            git add -- 'public/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9].html' || true
+          else
+            og_log="failed (dated page not updated; see warning)"
+            echo "::warning::Dated page bake failed; committing without it"
+          fi
+          { echo "### Dated share page (link preview)"; echo "$og_log" | sed 's/^/- /'; echo; } >> "$GITHUB_STEP_SUMMARY"
           if git diff --cached --quiet; then
             echo "No changes to commit."
             exit 0
