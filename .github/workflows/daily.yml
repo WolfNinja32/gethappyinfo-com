@@ -130,10 +130,11 @@ jobs:
         timeout-minutes: 5
         run: bash scripts/landscape_step.sh
 
-      # Repeat-card guard (Gregory, Oct 20): if today's line OR story (seed sourceUrl /
-      # summary / paragraph) matches the previous day's archived card, withhold
-      # public/fb/today.txt + today.reel.txt (restore them to HEAD = yesterday's date) so
-      # Martha's 6am date guard skips. Site, joy.json and images still commit as usual.
+      # Repeat-card guard (Gregory, Oct 20/21): if today's line OR story (seed sourceUrl /
+      # summary / paragraph) matches any of the previous 7 archived days, hold back
+      # public/fb/today.txt, today.reel.txt AND the dated fb/<date>.txt / <date>.reel.txt
+      # (restore to HEAD / delete if new) so Martha's 6am date guard skips. joy.json, site
+      # and images still commit; the "Fail on repeat card" step then fails the job loudly.
       - name: Repeat-card guard
         id: repeat
         if: env.DRY_RUN != 'true'
@@ -142,13 +143,16 @@ jobs:
           set +e; msg=$(python scripts/check_repeat_card.py); rc=$?; set -e
           echo "$msg"
           if [[ $rc -eq 3 ]]; then
+            d="${{ steps.decide.outputs.joy_date }}"
             echo "repeat=true" >> "$GITHUB_OUTPUT"
-            git checkout HEAD -- public/fb/today.txt 2>/dev/null || true
-            git checkout HEAD -- public/fb/today.reel.txt 2>/dev/null || true
-            echo "::warning title=REPEAT CARD::$msg — public/fb/today.txt and today.reel.txt NOT published (left at previous date). Fix and re-run with force."
-            echo "> **⚠️ REPEAT CARD:** $msg — fb/today.txt + today.reel.txt withheld (still previous date); Martha's date guard will skip. Re-run workflow_dispatch with force after fixing." >> "$GITHUB_STEP_SUMMARY"
+            echo "msg=$msg" >> "$GITHUB_OUTPUT"
+            for f in public/fb/today.txt public/fb/today.reel.txt "public/fb/${d}.txt" "public/fb/${d}.reel.txt"; do
+              if git cat-file -e "HEAD:$f" 2>/dev/null; then git checkout HEAD -- "$f"; else rm -f "$f"; fi
+            done
+            echo "::error title=REPEAT CARD::$msg — fb/today.txt, today.reel.txt, fb/${d}.txt, fb/${d}.reel.txt held back. Fix and re-run with force."
+            echo "> **⚠️ REPEAT CARD:** $msg — fb/today.txt, today.reel.txt and fb/${d}.txt/.reel.txt held back (today.txt still previous date; Martha's date guard will skip). Re-run workflow_dispatch with force after fixing." >> "$GITHUB_STEP_SUMMARY"
           elif [[ $rc -ne 0 ]]; then
-            echo "::warning::Repeat-card guard errored (rc=$rc); today.txt left as rendered"
+            echo "::warning::Repeat-card guard errored (rc=$rc); fb text left as rendered"
           fi
 
       - name: Render (dry run → artifact)
@@ -260,4 +264,11 @@ jobs:
           msg="Share render did not complete (deps: ${{ steps.deps.outcome }}, render: ${{ steps.render.outcome }}). joy.json was committed; share-vertical.png, fb-share.png and /fb/today.txt still show the PREVIOUS day and no art/<date>-portrait.png was published (if the log says PortraitFitError, the story paragraph is too long for the portrait card even at the minimum font size). Fix and re-run this workflow (workflow_dispatch) — it will re-render because today.txt is stale."
           echo "::error::$msg"
           echo "> **⚠️ $msg**" >> "$GITHUB_STEP_SUMMARY"
+          exit 1
+
+      # After the commit above (site + images shipped, fb text held back): fail loudly.
+      - name: Fail on repeat card
+        if: steps.repeat.outputs.repeat == 'true'
+        run: |
+          echo "::error title=REPEAT CARD::${{ steps.repeat.outputs.msg }} — site/images committed, fb/today.txt + dated fb text NOT published."
           exit 1
