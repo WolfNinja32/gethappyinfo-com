@@ -56,6 +56,8 @@ class TmpEnv(unittest.TestCase):
             "JOY_FILE": self.tmp / "public" / "joy.json",
             "ARCHIVE_FILE": self.tmp / "public" / "joy-archive.json",
             "RECENT_FILE": self.tmp / "data" / "recent.json",
+            "AVAILABLE_FILE": self.tmp / "data" / "stories-available.json",
+            "USED_FILE": self.tmp / "data" / "stories-used.json",
             "TASKS_FILE": self.tmp / "data" / "tasks.txt",
             "VOICE_FILE": REPO / "scripts" / "voice.md",
             "VOICE_FALLBACK_FILE": REPO / "scripts" / "voice-fallback.md",
