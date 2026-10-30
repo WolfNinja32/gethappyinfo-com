@@ -9,7 +9,11 @@ reuse yesterday's line+paragraph+seed unit and only advance date. Site never bla
 Design invariants:
   * No third-party packages — urllib + xml.etree.
   * Denylist filters research titles/feeds ONLY (never written paragraphs).
-  * Cross-day URL dedup via data/recent.json (14 days).
+  * Story no-reuse (Oct 29): data/stories-available.json (candidate pool) +
+    data/stories-used.json (permanent archive, never pruned). A story is
+    blocked by normalized URL OR title fingerprint, so a syndicated copy under
+    a different link cannot return. One story per day. data/recent.json is
+    still appended for back-compat but no longer gates selection.
   * Pacific edition date America/Los_Angeles.
   * AI optional: missing CLOUDFLARE_API_TOKEN or CLOUDFLARE_ACCOUNT_ID → degrade
     path, Actions stay green, conspicuous warning log.
@@ -45,6 +49,15 @@ SITE_URL = "https://gethappyinfo.com"
 ROOT = Path(__file__).resolve().parent.parent
 TASKS_FILE = ROOT / "data" / "tasks.txt"
 RECENT_FILE = ROOT / "data" / "recent.json"
+AVAILABLE_FILE = ROOT / "data" / "stories-available.json"
+USED_FILE = ROOT / "data" / "stories-used.json"
+# Pool entries not picked within this many days are dropped from AVAILABLE
+# (they are stale news). USED is never pruned.
+POOL_MAX_AGE_DAYS = 30
+# Same-story thresholds (title fingerprint).
+STORY_TITLE_RATIO = 0.82
+STORY_TOKEN_JACCARD = 0.6
+STORY_MIN_TOKENS = 3
 JOY_FILE = ROOT / "public" / "joy.json"
 ARCHIVE_FILE = ROOT / "public" / "joy-archive.json"
 
@@ -1061,7 +1074,10 @@ def pick_seed(by_topic: dict[str, list[dict]], recent_urls: set[str],
             title = it.get("text", "")
             if not url or not title:
                 continue
-            if url in recent_urls:
+            if isinstance(recent_urls, StoryLedger):
+                if recent_urls.is_used(url, title):
+                    continue
+            elif url in recent_urls or url_key(url) in {url_key(u) for u in recent_urls}:
                 continue
             # Title/feed denylist only — do not inspect excerpt for deny terms
             # beyond what's needed for a clean headline gate.
@@ -1077,6 +1093,231 @@ def pick_seed(by_topic: dict[str, list[dict]], recent_urls: set[str],
                 "sourceUrl": url,
                 "sourceTitle": title,
             }
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Story no-reuse: available pool + permanent used archive
+# ---------------------------------------------------------------------------
+_TRACKING_PARAM_RE = re.compile(
+    r"^(utm_.*|fbclid|gclid|dclid|msclkid|mc_cid|mc_eid|igshid|ref|ref_src|"
+    r"src|source|cmp|campaign|share|amp|output|outputtype|s|_ga|yclid)$", re.I)
+_STOP = set("""a an the and or but of to in on at for with by from as is are was
+were be been it its this that these those his her their our your my he she
+they we you i who what when where how why after before into over up down out
+about than then so just not no new s t says said""".split())
+
+
+def url_key(url: str) -> str:
+    """Normalize a story URL for identity: drop scheme, www./m./amp. hosts,
+    tracking/query params, fragments, AMP path suffixes and trailing slash."""
+    if not url:
+        return ""
+    p = urlsplit(url.strip())
+    host = (p.netloc or "").lower().split("@")[-1].split(":")[0]
+    for pre in ("www.", "m.", "amp.", "mobile."):
+        if host.startswith(pre):
+            host = host[len(pre):]
+    path = re.sub(r"/+", "/", p.path or "")
+    path = re.sub(r"(/amp|\.amp|/amp\.html)/?$", "", path, flags=re.I)
+    path = path.rstrip("/").lower()
+    kept = []
+    for part in (p.query or "").split("&"):
+        if not part:
+            continue
+        k = part.split("=", 1)[0]
+        if _TRACKING_PARAM_RE.match(k):
+            continue
+        kept.append(part)
+    q = "&".join(sorted(kept))
+    return f"{host}{path}" + (f"?{q}" if q else "")
+
+
+def _title_tokens(title: str) -> list[str]:
+    return [t for t in norm_title(title).split() if t not in _STOP and len(t) > 1]
+
+
+def story_fingerprint(title: str) -> str:
+    """Order-insensitive fingerprint of a headline's significant words
+    (key entities, numbers). Used to catch the same story under a new link."""
+    return " ".join(sorted(set(_title_tokens(title))))
+
+
+def same_story(title_a: str, title_b: str) -> bool:
+    if not title_a or not title_b:
+        return False
+    na, nb = norm_title(title_a), norm_title(title_b)
+    if na == nb:
+        return True
+    ta, tb = set(_title_tokens(title_a)), set(_title_tokens(title_b))
+    if len(ta) >= STORY_MIN_TOKENS and ta == tb:
+        return True
+    if SequenceMatcher(None, na, nb).ratio() >= STORY_TITLE_RATIO:
+        return True
+    if min(len(ta), len(tb)) >= STORY_MIN_TOKENS:
+        jac = len(ta & tb) / len(ta | tb)
+        if jac >= STORY_TOKEN_JACCARD:
+            return True
+    return False
+
+
+def _entry(url: str, title: str, **extra) -> dict:
+    e = {"url": url, "key": url_key(url), "title": title,
+         "fingerprint": story_fingerprint(title)}
+    e.update({k: v for k, v in extra.items() if v not in (None, "")})
+    return e
+
+
+class StoryLedger:
+    """In-memory view of data/stories-available.json + data/stories-used.json."""
+
+    def __init__(self, available: list | None = None, used: list | None = None):
+        self.available: list[dict] = [e for e in (available or []) if isinstance(e, dict)]
+        self.used: list[dict] = [e for e in (used or []) if isinstance(e, dict)]
+        self._reindex()
+
+    def _reindex(self) -> None:
+        self._used_keys = {e.get("key") or url_key(e.get("url", "")) for e in self.used}
+        self._used_keys.discard("")
+        self._used_fps = {e.get("fingerprint") for e in self.used if e.get("fingerprint")}
+
+    # -- identity -----------------------------------------------------------
+    def is_used(self, url: str, title: str = "") -> bool:
+        k = url_key(url)
+        if k and k in self._used_keys:
+            return True
+        if title:
+            fp = story_fingerprint(title)
+            if fp and len(fp.split()) >= STORY_MIN_TOKENS and fp in self._used_fps:
+                return True
+            for e in self.used:
+                if same_story(title, e.get("title", "")):
+                    return True
+        return False
+
+    def used_on(self, date_iso: str) -> list[dict]:
+        return [e for e in self.used if e.get("date") == date_iso]
+
+    # -- pool -----------------------------------------------------------------
+    def add_candidates(self, by_topic: dict, date_iso: str) -> int:
+        added = 0
+        for topic, items in (by_topic or {}).items():
+            for it in items or []:
+                url, title = it.get("url", ""), it.get("text", "")
+                if not url or not title or self.is_used(url, title):
+                    continue
+                k = url_key(url)
+                dup = False
+                for e in self.available:
+                    if e.get("key") == k or same_story(title, e.get("title", "")):
+                        if e.get("topic") == topic or e.get("key") == k:
+                            # refresh excerpt if we have one
+                            if it.get("excerpt") and not e.get("excerpt"):
+                                e["excerpt"] = it["excerpt"]
+                        dup = True
+                        break
+                if dup:
+                    continue
+                self.available.append(_entry(url, title, topic=topic,
+                                             excerpt=(it.get("excerpt") or "").strip(),
+                                             added=date_iso))
+                added += 1
+        return added
+
+    def prune_pool(self, date) -> None:
+        cutoff = date.toordinal() - POOL_MAX_AGE_DAYS
+        keep = []
+        for e in self.available:
+            if self.is_used(e.get("url", ""), e.get("title", "")):
+                continue
+            try:
+                d = datetime.strptime(e.get("added", ""), "%Y-%m-%d").date()
+                if d.toordinal() < cutoff:
+                    continue
+            except ValueError:
+                pass
+            keep.append(e)
+        self.available = keep
+
+    def mark_used(self, url: str, title: str, date_iso: str, how: str = "picked") -> None:
+        if url_key(url) in self._used_keys and any(
+                e.get("date") == date_iso and e.get("key") == url_key(url) for e in self.used):
+            return
+        self.used.append(_entry(url, title, date=date_iso, how=how))
+        k = url_key(url)
+        self.available = [e for e in self.available
+                          if e.get("key") != k and not same_story(title, e.get("title", ""))]
+        self._reindex()
+
+    # -- persistence ----------------------------------------------------------
+    @classmethod
+    def load(cls) -> "StoryLedger":
+        used = load_json(USED_FILE, default=None)
+        led = cls(load_json(AVAILABLE_FILE, default=[]), used if isinstance(used, list) else [])
+        if not isinstance(used, list):
+            led.seed_from_history()
+        return led
+
+    def seed_from_history(self, archive: dict | None = None, recent: list | None = None) -> int:
+        """First run: import every story already published (joy-archive seeds,
+        current joy.json, data/recent.json) so old stories can never return."""
+        n = 0
+        if archive is None:
+            archive = load_json(ARCHIVE_FILE, default={})
+        days = archive.get("days", {}) if isinstance(archive, dict) else {}
+        for d in sorted(days):
+            seed = (days[d] or {}).get("seed") if isinstance(days[d], dict) else None
+            if isinstance(seed, dict) and seed.get("sourceUrl"):
+                if not self.is_used(seed["sourceUrl"]):
+                    self.used.append(_entry(seed["sourceUrl"], seed.get("sourceTitle", ""),
+                                            date=d, how="history:joy-archive"))
+                    self._reindex(); n += 1
+        joy = load_json(JOY_FILE, default={})
+        seed = joy.get("seed") if isinstance(joy, dict) else None
+        if isinstance(seed, dict) and seed.get("sourceUrl") and not self.is_used(seed["sourceUrl"]):
+            self.used.append(_entry(seed["sourceUrl"], seed.get("sourceTitle", ""),
+                                    date=joy.get("date", ""), how="history:joy"))
+            self._reindex(); n += 1
+        if recent is None:
+            recent = load_json(RECENT_FILE, default=[])
+        for e in recent if isinstance(recent, list) else []:
+            if isinstance(e, dict) and e.get("url") and not self.is_used(e["url"]):
+                self.used.append(_entry(e["url"], "", date=e.get("date", ""),
+                                        how="history:recent"))
+                self._reindex(); n += 1
+        return n
+
+    def save(self) -> None:
+        AVAILABLE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        AVAILABLE_FILE.write_text(json.dumps(self.available, indent=2) + "\n", encoding="utf-8")
+        USED_FILE.write_text(json.dumps(self.used, indent=2) + "\n", encoding="utf-8")
+
+
+SEED_TOPIC_ORDER = ["inspiring", "animals", "health", "earth", "science"]
+
+
+def pick_story(ledger: StoryLedger, date) -> dict | None:
+    """Pick exactly ONE fresh story from the available pool, move it to used,
+    and return a seed {summary, sourceUrl, sourceTitle}; None if none fresh."""
+    date_iso = date.isoformat()
+    topics = list(SEED_TOPIC_ORDER)
+    for e in ledger.available:
+        if e.get("topic") not in topics:
+            topics.append(e.get("topic"))
+    for topic in topics:
+        for e in list(ledger.available):
+            if e.get("topic") != topic:
+                continue
+            url, title = e.get("url", ""), e.get("title", "")
+            if not url or not title or is_denylisted(title):
+                continue
+            if ledger.is_used(url, title):
+                continue
+            summary = (e.get("excerpt") or "").strip() or title
+            if len(summary) > 400:
+                summary = summary[:397].rstrip() + "…"
+            ledger.mark_used(url, title, date_iso)
+            return {"summary": summary, "sourceUrl": url, "sourceTitle": title}
     return None
 
 
@@ -1352,10 +1593,23 @@ def main(force: bool = False) -> int:
 
     # --- Research (one seed; miss allowed) ---------------------------------
     by_topic = fetch_all(FEEDS)
-    recent = prune_recent(load_json(RECENT_FILE, default=[]), date)
-    recent_urls = {e["url"] for e in recent if isinstance(e, dict) and "url" in e}
-    seed = pick_seed(by_topic, recent_urls, date)
+    ledger = StoryLedger.load()
+    # Re-mark whatever is live right now (covers manual edits / reused units).
+    if isinstance(existing, dict) and isinstance(existing.get("seed"), dict):
+        es = existing["seed"]
+        if es.get("sourceUrl") and not ledger.is_used(es["sourceUrl"], es.get("sourceTitle", "")):
+            ledger.mark_used(es["sourceUrl"], es.get("sourceTitle", ""),
+                             existing.get("date", ""), how="live")
+    ledger.prune_pool(date)
+    added = ledger.add_candidates(by_topic, date_iso)
+    print(f"[update_joy] story pool: +{added} new, {len(ledger.available)} available, "
+          f"{len(ledger.used)} used (permanent)")
+    seed = pick_story(ledger, date)
+    # Persist BEFORE writing: a picked story is burned even if the writer
+    # later degrades, so it can never surface again under any link.
+    ledger.save()
     if seed:
+        recent = prune_recent(load_json(RECENT_FILE, default=[]), date)
         recent.append({"url": seed["sourceUrl"], "date": date_iso})
         RECENT_FILE.write_text(json.dumps(recent, indent=2) + "\n", encoding="utf-8")
         print(f"[update_joy] research seed: {seed['sourceTitle'][:80]!r}")
