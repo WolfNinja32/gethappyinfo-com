@@ -5,7 +5,7 @@ Why (Casey's weekly site check, 2026-11-11, P1): a no-JS fetch of gethappyinfo.c
 only ~370 characters of text ("Loading a little joy…"), and the page had no JSON-LD.
 Crawlers and agents don't run the page's JS, so the day's content has to be in the HTML.
 
-What: three regions of public/index.html, each between marker comments, are rewritten
+What: regions of public/index.html, each between marker comments, are rewritten
 from public/joy.json (fields copied word for word, HTML-escaped; nothing is invented):
 
     <!-- joy:jsonld:start --> ... <!-- joy:jsonld:end -->   in <head>
@@ -18,16 +18,22 @@ from public/joy.json (fields copied word for word, HTML-escaped; nothing is inve
         the day's line (the JS sets the same text with textContent).
     <!-- joy:story:start --> ... <!-- joy:story:end -->     inside <ul id="news">
         the exact <li> markup the JS renderNew() writes: paragraph + "Story source" link.
+    <!-- joy:postmark:start --> ... <!-- joy:postmark:end -->   inside #postmark-date
+        month + day in the same format as the page JS dateParts()/applyPostmark()
+        (JAN–DEC, day with no leading zero, e.g. "NOV 11" or "MAY 7") from joy.json "date".
+    <!-- joy:postmark-year:start --> ... <!-- joy:postmark-year:end -->  inside #postmark-year
+        the four-digit year from that same date.
 
-The JS still fetches joy.json / joy-archive.json and overwrites #task and #news exactly
-as before, so with JS nothing changes visually (it replaces identical content); without
-JS the reader sees the real card instead of "Loading a little joy…".
+The JS still fetches joy.json / joy-archive.json and overwrites #task, #news, #postmark-date
+and #postmark-year exactly as before, so with JS nothing changes visually (it replaces
+identical content); without JS the reader sees the real card and today's postmark instead
+of "Loading a little joy…" and the launch-day stamp "MAY 27".
 
 If the day has no line+paragraph (old-shape or missing data), the line region falls back
 to the original placeholder, the story region is emptied and no CreativeWork is emitted.
 
 scripts/build_og_page.py reuses apply_day() so each dated page /<date> carries ITS OWN
-day's content, CreativeWork and canonical (never today's).
+day's content, CreativeWork, canonical and postmark (never today's).
 
 Usage:
   python scripts/bake_index.py               # rewrite public/index.html from joy.json (only if changed)
@@ -54,6 +60,26 @@ SITE_TITLE = "Get Happy Info"
 PLACEHOLDER_LINE = "Loading a little joy…"
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 CANONICAL_RE = re.compile(r'<link\s+rel="canonical"\s+href="[^"]*"\s*/?>')
+
+# Same month names and day formatting as the page JS dateParts() (no timezone).
+POSTMARK_MONTHS = ("JAN", "FEB", "MAR", "APR", "MAY", "JUN",
+                   "JUL", "AUG", "SEP", "OCT", "NOV", "DEC")
+
+
+def postmark_labels(date: str | None) -> tuple[str, str] | None:
+    """(month-day, year) matching JS applyPostmark(), or None if `date` is not YYYY-MM-DD.
+
+    JS: months = ['JAN',..,'DEC']; day = parseInt(m[3], 10) (no leading zero);
+    #postmark-date = monthShort + ' ' + day; #postmark-year = year.
+    """
+    if not (isinstance(date, str) and DATE_RE.match(date)):
+        return None
+    year, month, day = date.split("-")
+    mi, di = int(month), int(day)
+    if not (1 <= mi <= 12 and 1 <= di <= 31):
+        return None
+    return f"{POSTMARK_MONTHS[mi - 1]} {di}", year
+
 
 
 class BakeError(Exception):
@@ -221,6 +247,10 @@ def apply_day(page: str, date: str | None, day: dict | None, *, images: list[str
     line = " ".join(day["line"].split()) if is_new_shape(day) else PLACEHOLDER_LINE
     page = _sub_region(page, "line", html.escape(line, quote=False))
     page = _sub_region(page, "story", story_html(day))
+    labels = postmark_labels(date)
+    if labels:
+        page = _sub_region(page, "postmark", html.escape(labels[0], quote=False))
+        page = _sub_region(page, "postmark-year", html.escape(labels[1], quote=False))
     if canonical:
         page = CANONICAL_RE.sub(f'<link rel="canonical" href="{html.escape(canonical, quote=True)}" />',
                                 page, count=1)
@@ -231,7 +261,7 @@ def bake_index(repo: Path, git_index: bool = False) -> tuple[str, str]:
     """Return (new index.html text, mode). Writes nothing."""
     path = repo / "public" / "index.html"
     page = path.read_text(encoding="utf-8")
-    for name in ("jsonld", "line", "story"):
+    for name in ("jsonld", "line", "story", "postmark", "postmark-year"):
         if not _region_re(name).search(page):
             raise BakeError(f"public/index.html is missing the joy:{name} markers")
     joy = json.loads((repo / "public" / "joy.json").read_text(encoding="utf-8"))
