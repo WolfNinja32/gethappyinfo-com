@@ -226,6 +226,20 @@ jobs:
           if [[ "${{ steps.render.outcome }}" == "success" ]]; then
             git add $SHARE_PATHS
           fi
+          # No-JS homepage (Casey's 2026-11-11 site check): bake today's line, story
+          # paragraph + source link and JSON-LD (WebSite, Organization, CreativeWork)
+          # from joy.json into public/index.html between joy:* marker comments. Runs
+          # AFTER staging so --git-index only lists art images that ship in THIS commit,
+          # and BEFORE the dated-page bake (which copies index.html and re-bakes each
+          # page's own day + canonical). Never blocks the commit: a failure only warns.
+          if idx_log=$(python scripts/bake_index.py --git-index); then
+            echo "$idx_log"
+            git add public/index.html
+          else
+            idx_log="failed (index.html not re-baked; see warning)"
+            echo "::warning::Homepage bake failed; committing without it"
+          fi
+          { echo "### Homepage no-JS bake"; echo "- $idx_log"; echo; } >> "$GITHUB_STEP_SUMMARY"
           # Dated share page public/<date>.html (served at /<date>, the URL today.txt
           # links): index.html with per-day og:/twitter: tags. Baked AFTER staging so
           # --git-index only uses the landscape image if art/<date>-landscape.png is

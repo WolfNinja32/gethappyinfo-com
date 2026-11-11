@@ -12,7 +12,8 @@ How: with the default html_handling ("auto-trailing-slash"), a file
 public/2026-10-04.html is served at /2026-10-04 with HTTP 200 and no redirect
 (/2026-10-04.html and /2026-10-04/ 307 to /2026-10-04). This script copies
 public/index.html byte for byte and only swaps the og:* / twitter:* <meta> block
-in <head>. The page's JS already reads the date from the path
+in <head>, then (scripts/bake_index.apply_day) re-bakes the joy:* no-JS regions,
+JSON-LD and <link rel="canonical"> for THAT date (index.html carries today's). The page's JS already reads the date from the path
 (/^\\/(\\d{4}-\\d{2}-\\d{2})\\/?$/) and loads that day from /joy-archive.json, exactly
 as it does today under the SPA fallback; nothing else on the page changes.
 
@@ -70,6 +71,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from build_fb_handoff import SIGN_OFF  # noqa: E402  (single source for "Pass it on ✉")
+import bake_index  # noqa: E402  (no-JS card + JSON-LD + canonical regions)
 
 REPO = Path(__file__).resolve().parent.parent
 SITE = "https://gethappyinfo.com"
@@ -244,6 +246,12 @@ def bake(repo: Path, date: str, *, art_dir: Path | None = None, git_index: bool 
         mode += "; no line for this date, index.html title/description kept"
     page = render_page(index_html, date, build_tags(date, line, image, size, index_html),
                        "landscape" if ok else "fallback")
+    # index.html carries TODAY's baked card (scripts/bake_index.py); re-bake the joy:*
+    # regions and the canonical for THIS date so /<date> never shows another day's card.
+    day = bake_index.day_data(repo, date)
+    images = [u for u in bake_index.day_images(repo, date, git_index, art_dir)
+              if not (no_landscape and u.endswith("-landscape.png"))]
+    page = bake_index.apply_day(page, date, day, images=images, canonical=f"{SITE}/{date}")
     return page, mode
 
 
@@ -304,7 +312,7 @@ def main(argv: list[str] | None = None, repo: Path = REPO) -> int:
             changed = write_atomic(out, page)
             print(f"[og_page] {d}: {'wrote' if changed else 'no change'} {out} ({mode})")
     except (PageError, OSError, ValueError) as e:
-        print(f"::warning::dated page bake failed: {type(e).__name__}: {e}", file=sys.stderr)
+        print(f"::warning::dated page bake failed: {bake_index.sanitize_workflow_message(f'{type(e).__name__}: {e}')}", file=sys.stderr)
         return 1
     if args.check and stale:
         print(f"[og_page] STALE: {', '.join(str(p) for p in stale)}", file=sys.stderr)
