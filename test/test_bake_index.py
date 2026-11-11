@@ -189,5 +189,91 @@ class RealIndexTest(unittest.TestCase):
         self.assertIn("newsEl.innerHTML = '<li style=\"border:0;padding:0;opacity:1;animation:none\">'", page)
 
 
+
+class SafeUrlAndSanitizeTest(unittest.TestCase):
+    """Hardening: urllib.parse safe_url + workflow-command sanitizer."""
+
+    def test_safe_url_accepts_normal_http_https(self):
+        self.assertEqual(bi.safe_url("https://example.org/a?b=1&c=2"),
+                         "https://example.org/a?b=1&c=2")
+        self.assertEqual(bi.safe_url("http://example.org/path"),
+                         "http://example.org/path")
+        # scheme case is allowed; original string is returned unchanged
+        self.assertEqual(bi.safe_url("HttpS://ok.example/x"),
+                         "HttpS://ok.example/x")
+
+    def test_safe_url_rejects_non_http_schemes(self):
+        for u in ("javascript:alert(1)", "JAVASCRIPT:alert(1)",
+                  "vbscript:msgbox(1)", "data:text/html,<script>alert(1)</script>",
+                  "file:///etc/passwd", "//evil.example", "httpsx://evil",
+                  "", None):
+            self.assertIsNone(bi.safe_url(u), msg=repr(u))
+
+    def test_safe_url_rejects_newline_javascript(self):
+        self.assertIsNone(bi.safe_url("https://example.com/foo\njavascript:alert(1)"))
+        self.assertIsNone(bi.safe_url("https://example.com/foo\rjavascript:alert(1)"))
+        self.assertIsNone(bi.safe_url("https://example.com/foo\r\njavascript:alert(1)"))
+
+    def test_safe_url_rejects_control_chars_and_spaces(self):
+        self.assertIsNone(bi.safe_url("https://example.com/foo\x00bar"))
+        self.assertIsNone(bi.safe_url("https://example.com/foo\x1fbar"))
+        self.assertIsNone(bi.safe_url("https://example.com/foo\x7fbar"))
+        self.assertIsNone(bi.safe_url("https://example.com/foo\tbar"))
+        self.assertIsNone(bi.safe_url("https://example.com/foo bar"))
+        self.assertIsNone(bi.safe_url(" https://example.com/foo"))
+        self.assertIsNone(bi.safe_url("https://example.com/foo "))
+        self.assertIsNone(bi.safe_url("https://example.com/foo\u2028bar"))
+
+    def test_safe_url_rejects_missing_host(self):
+        for u in ("https://", "http://", "https:///", "http:///path",
+                  "https:example.com", "https:"):
+            self.assertIsNone(bi.safe_url(u), msg=repr(u))
+
+    def test_sanitize_strips_newlines_and_command_injection(self):
+        raw = "JSONDecodeError: bad\n::error::pwned\n::warning title=x::y"
+        out = bi.sanitize_workflow_message(raw)
+        self.assertNotIn("\n", out)
+        self.assertNotIn("\r", out)
+        self.assertNotIn("::", out)
+        self.assertIn("%3A%3A", out)
+        # collapsed to a single line of spaces
+        self.assertEqual(out, " ".join(out.split()))
+
+    def test_sanitize_escapes_percent_and_truncates(self):
+        out = bi.sanitize_workflow_message("100% done")
+        self.assertEqual(out, "100%25 done")
+        long = "A" * 500
+        out = bi.sanitize_workflow_message(long)
+        self.assertEqual(len(out), 300)
+        self.assertTrue(out.startswith("A" * 300))
+
+    def test_bake_warning_sanitizes_exception_text(self):
+        """main() must not print raw newlines or '::' from an exception."""
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        root = Path(tmp.name)
+        pub = root / "public"
+        pub.mkdir()
+        (pub / "index.html").write_text(INDEX, encoding="utf-8")
+        (pub / "joy.json").write_text(json.dumps(TODAY), encoding="utf-8")
+
+        def boom(*_a, **_k):
+            raise ValueError("bad\n::error::injected-command")
+
+        orig = bi.bake_index
+        bi.bake_index = boom
+        self.addCleanup(lambda: setattr(bi, "bake_index", orig))
+        buf_out, buf_err = io.StringIO(), io.StringIO()
+        with redirect_stdout(buf_out), redirect_stderr(buf_err):
+            rc = bi.main([], repo=root)
+        logged = buf_out.getvalue() + buf_err.getvalue()
+        self.assertEqual(rc, 1)
+        self.assertIn("::warning::index bake failed:", logged)
+        payload = logged.split("::warning::index bake failed:", 1)[1]
+        self.assertNotIn("\n", payload.strip())
+        self.assertNotIn("::", payload)
+        self.assertIn("injected-command", payload)
+
+
 if __name__ == "__main__":
     unittest.main()

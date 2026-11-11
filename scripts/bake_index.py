@@ -45,6 +45,7 @@ import re
 import subprocess
 import sys
 from pathlib import Path
+from urllib.parse import urlparse
 
 REPO = Path(__file__).resolve().parent.parent
 SITE = "https://gethappyinfo.com"
@@ -86,10 +87,46 @@ def day_data(repo: Path, date: str) -> dict | None:
     return day if isinstance(day, dict) else None
 
 
+# Whitespace (Unicode + \s) or C0 / DEL control characters — rejected in URLs.
+_UNSAFE_URL_CHAR = re.compile(r"[\s\x00-\x1f\x7f]")
+WORKFLOW_MSG_LIMIT = 300
+
+
 def safe_url(u) -> str | None:
-    """http(s) only, like the page JS safeUrl(); None otherwise."""
-    u = str(u or "").strip()
-    return u if re.match(r"^https?://", u, re.I) else None
+    """http(s) only, with a hostname; rejects whitespace and control characters.
+
+    Like the page JS safeUrl(), but parsed with urllib.parse rather than a prefix
+    match, so a newline or other control character cannot sneak past https://.
+    Returns the original string (no normalization) when it is acceptable.
+    """
+    if u is None:
+        return None
+    u = str(u)
+    if not u or _UNSAFE_URL_CHAR.search(u):
+        return None
+    try:
+        parsed = urlparse(u)
+    except ValueError:
+        return None
+    if parsed.scheme.lower() not in ("http", "https"):
+        return None
+    if not parsed.hostname:
+        return None
+    return u
+
+
+def sanitize_workflow_message(msg: object, limit: int = WORKFLOW_MSG_LIMIT) -> str:
+    """Make text safe to interpolate into a GitHub Actions workflow command.
+
+    Collapse all whitespace (including newlines) to single spaces, then escape
+    '%', leftover CR/LF, and '::' (command injection). Truncate to `limit`.
+    """
+    s = " ".join(str(msg).split())
+    s = (s.replace("%", "%25")
+          .replace("\r", "%0D")
+          .replace("\n", "%0A")
+          .replace("::", "%3A%3A"))
+    return s[:limit] if len(s) > limit else s
 
 
 def git_index_has(repo: Path, path: Path) -> bool:
@@ -232,7 +269,7 @@ def main(argv: list[str] | None = None, repo: Path = REPO) -> int:
     try:
         page, mode = bake_index(repo, git_index=args.git_index)
     except (BakeError, OSError, ValueError) as e:
-        print(f"::warning::index bake failed: {type(e).__name__}: {e}", file=sys.stderr)
+        print(f"::warning::index bake failed: {sanitize_workflow_message(f'{type(e).__name__}: {e}')}", file=sys.stderr)
         return 1
     if args.check:
         stale = path.read_bytes() != page.encode("utf-8")

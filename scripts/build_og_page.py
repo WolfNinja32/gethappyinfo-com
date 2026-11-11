@@ -312,7 +312,7 @@ def main(argv: list[str] | None = None, repo: Path = REPO) -> int:
             changed = write_atomic(out, page)
             print(f"[og_page] {d}: {'wrote' if changed else 'no change'} {out} ({mode})")
     except (PageError, OSError, ValueError) as e:
-        print(f"::warning::dated page bake failed: {type(e).__name__}: {e}", file=sys.stderr)
+        print(f"::warning::dated page bake failed: {bake_index.sanitize_workflow_message(f'{type(e).__name__}: {e}')}", file=sys.stderr)
         return 1
     if args.check and stale:
         print(f"[og_page] STALE: {', '.join(str(p) for p in stale)}", file=sys.stderr)
