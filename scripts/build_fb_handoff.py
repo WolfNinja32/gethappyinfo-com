@@ -101,6 +101,9 @@ import sys
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from bake_index import valid_date  # noqa: E402  (shared strict date check)
+
 REPO = Path(__file__).resolve().parent.parent
 SITE = "https://gethappyinfo.com"
 IMAGE_URL = f"{SITE}/share-vertical.png"
@@ -108,7 +111,6 @@ SIGN_OFF = "Pass it on ✉"
 REEL_SIGN_OFF = "Send this to someone who needs it today ✉"
 REEL_HASHTAGS = "#kindness #gethappy"
 REEL_HEADER = "Reel caption:"
-DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
 def normalize(text: str) -> str:
@@ -202,9 +204,8 @@ def build(repo: Path, date: str | None = None, check: bool = False,
     joy = load_joy(repo)
     joy_date = joy.get("date")
     date = date or joy_date
-    if not date or not DATE_RE.match(date):
+    if valid_date(date) is None:  # strict ASCII YYYY-MM-DD + real calendar date
         raise SystemExit(f"[fb_handoff] bad date: {date!r}")
-    datetime.date.fromisoformat(date)  # validates calendar date
 
     la_today = datetime.datetime.now(ZoneInfo("America/Los_Angeles")).date().isoformat()
     if date != la_today:

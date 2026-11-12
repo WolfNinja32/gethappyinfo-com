@@ -58,7 +58,6 @@ Stdlib only. Idempotent: pages are only rewritten when their content changes.
 from __future__ import annotations
 
 import argparse
-import datetime
 import html
 import json
 import os
@@ -76,8 +75,7 @@ import bake_index  # noqa: E402  (no-JS card + JSON-LD + canonical regions)
 REPO = Path(__file__).resolve().parent.parent
 SITE = "https://gethappyinfo.com"
 LANDSCAPE_SIZE = (1200, 630)
-DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
-PAGE_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})\.html$")
+PAGE_RE = re.compile(r"([0-9]{4}-[0-9]{2}-[0-9]{2})\.html", re.ASCII)  # use with fullmatch()
 # one og:* / twitter:* meta tag on its own line (index.html keeps one per line)
 META_RE = re.compile(
     r'^[ \t]*<meta\s+(?:property|name)="(?:og|twitter):[^"]*"[^>]*>[ \t]*\r?\n', re.M)
@@ -227,9 +225,8 @@ def render_page(index_html: str, date: str, tags, mode: str) -> str:
 def bake(repo: Path, date: str, *, art_dir: Path | None = None, git_index: bool = False,
          no_landscape: bool = False) -> tuple[str, str]:
     """Return (page html, mode description) for `date`. Writes nothing."""
-    if not DATE_RE.match(date):
+    if bake_index.valid_date(date) is None:
         raise PageError(f"bad date {date!r}")
-    datetime.date.fromisoformat(date)
     index_html = (repo / "public" / "index.html").read_text(encoding="utf-8")
     art_dir = art_dir if art_dir is not None else repo / "public" / "art"
     if no_landscape:
@@ -276,7 +273,7 @@ def target_dates(repo: Path, date: str | None) -> list[str]:
     joy = json.loads((repo / "public" / "joy.json").read_text(encoding="utf-8"))
     dates = {joy.get("date")} if joy.get("date") else set()
     for p in (repo / "public").iterdir():
-        m = PAGE_RE.match(p.name)
+        m = PAGE_RE.fullmatch(p.name)
         if m:
             dates.add(m.group(1))
     if not dates:
