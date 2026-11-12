@@ -44,6 +44,7 @@ Stdlib only. Idempotent.
 from __future__ import annotations
 
 import argparse
+import datetime
 import html
 import json
 import os
@@ -58,12 +59,30 @@ SITE = "https://gethappyinfo.com"
 SITE_NAME = "Get Happy"
 SITE_TITLE = "Get Happy Info"
 PLACEHOLDER_LINE = "Loading a little joy…"
-DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+# ASCII digits only (no fullwidth/Unicode digits); always use with fullmatch()
+# (re.match + "$" would also accept a trailing newline). Prefer valid_date().
+DATE_RE = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", re.ASCII)
 CANONICAL_RE = re.compile(r'<link\s+rel="canonical"\s+href="[^"]*"\s*/?>')
 
 # Same month names and day formatting as the page JS dateParts() (no timezone).
 POSTMARK_MONTHS = ("JAN", "FEB", "MAR", "APR", "MAY", "JUN",
                    "JUL", "AUG", "SEP", "OCT", "NOV", "DEC")
+
+
+def valid_date(date: object) -> str | None:
+    """Shared strict date check: `date` if it is a real calendar date as ASCII YYYY-MM-DD, else None.
+
+    Whole-string match (no trailing newline), ASCII digits only, and a real day
+    (2026-02-31, 2026-13-01 and year 0000 are rejected by date.fromisoformat).
+    Used by bake_index, build_og_page and build_fb_handoff so they agree on what a date is.
+    """
+    if not (isinstance(date, str) and DATE_RE.fullmatch(date)):
+        return None
+    try:
+        datetime.date.fromisoformat(date)
+    except ValueError:
+        return None
+    return date
 
 
 def postmark_labels(date: str | None) -> tuple[str, str] | None:
@@ -72,7 +91,7 @@ def postmark_labels(date: str | None) -> tuple[str, str] | None:
     JS: months = ['JAN',..,'DEC']; day = parseInt(m[3], 10) (no leading zero);
     #postmark-date = monthShort + ' ' + day; #postmark-year = year.
     """
-    if not (isinstance(date, str) and DATE_RE.match(date)):
+    if valid_date(date) is None:
         return None
     year, month, day = date.split("-")
     mi, di = int(month), int(day)
@@ -237,7 +256,11 @@ def apply_day(page: str, date: str | None, day: dict | None, *, images: list[str
     """Rewrite the joy:* marker regions (and canonical href, if given) for `date`/`day`.
 
     Regions whose markers are absent are left alone, so this is safe on any HTML.
+    A `date` that is not None must pass valid_date(); otherwise BakeError is raised
+    before any region is rewritten.
     """
+    if date is not None and valid_date(date) is None:
+        raise BakeError(f"invalid date {date!r} (need a real YYYY-MM-DD calendar date)")
     m = re.search(r'<meta\s+name="description"\s+content="([^"]*)"', page)
     desc = html.unescape(m.group(1)) if m else None
     ld = json_ld(date, day, images or [], desc)
@@ -265,9 +288,11 @@ def bake_index(repo: Path, git_index: bool = False) -> tuple[str, str]:
         if not _region_re(name).search(page):
             raise BakeError(f"public/index.html is missing the joy:{name} markers")
     joy = json.loads((repo / "public" / "joy.json").read_text(encoding="utf-8"))
-    date = joy.get("date") if isinstance(joy, dict) else None
-    if not (isinstance(date, str) and DATE_RE.match(date)):
-        date = None
+    raw = joy.get("date") if isinstance(joy, dict) else None
+    date = valid_date(raw)
+    if raw is not None and date is None:
+        # reject before anything is written: no region (incl. the postmark) is touched
+        raise BakeError(f"public/joy.json has an invalid date {raw!r} (need a real YYYY-MM-DD calendar date)")
     day = joy if date and is_new_shape(joy) else None
     images = day_images(repo, date, git_index) if day else []
     mode = f"{date}: line+story+CreativeWork ({len(images)} image(s))" if day else \

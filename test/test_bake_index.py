@@ -331,5 +331,69 @@ class PostmarkLabelsTest(unittest.TestCase):
         self.assertIsNone(got)
 
 
+# SecurityJo SJ-1 (PR #48): impossible / non-ASCII / trailing-newline dates.
+BAD_DATES = {
+    "feb31": "2026-02-31",
+    "month13": "2026-13-01",
+    "trailing_newline": "2026-11-11\n",
+    "fullwidth_digits": "\uff12\uff10\uff12\uff16-\uff11\uff11-\uff11\uff11",
+    "year_zero": "0000-01-01",
+}
+
+
+class StrictDateTest(Scratch):
+    def test_valid_date_accepts_real_dates(self):
+        for d in ("2026-11-11", "2024-02-29", "2026-05-07"):
+            self.assertEqual(bi.valid_date(d), d)
+            self.assertIsNotNone(bi.postmark_labels(d))
+        self.assertEqual(bi.postmark_labels("2024-02-29"), ("FEB 29", "2024"))
+
+    def test_valid_date_rejects_bad_dates(self):
+        for name, d in BAD_DATES.items():
+            with self.subTest(name):
+                self.assertIsNone(bi.valid_date(d))
+                self.assertIsNone(bi.postmark_labels(d))
+        for d in (None, 20261111, "", "2025-02-29", " 2026-11-11", "2026-11-1"):
+            self.assertIsNone(bi.valid_date(d), msg=repr(d))
+
+    def test_bad_joy_date_writes_nothing_and_warns_sanitized(self):
+        before = self.index()
+        for name, d in BAD_DATES.items():
+            with self.subTest(name):
+                (self.root / "public" / "joy.json").write_text(
+                    json.dumps(dict(TODAY, date=d)), encoding="utf-8")
+                code, out = self.run_main()
+                self.assertEqual(code, 1)
+                self.assertIn("::warning::index bake failed:", out)
+                payload = out.split("::warning::index bake failed:", 1)[1]
+                self.assertNotIn("\n", payload.strip())
+                self.assertNotIn("::", payload)
+                self.assertIn("invalid date", payload)
+                self.assertEqual(self.index(), before)  # postmark (and every region) untouched
+                self.assertIn("<!-- joy:postmark:start -->MAY 27<!-- joy:postmark:end -->", self.index())
+
+    def test_valid_date_still_bakes_postmark(self):
+        code, _ = self.run_main()
+        self.assertEqual(code, 0)
+        page = self.index()
+        self.assertIn("<!-- joy:postmark:start -->NOV 11<!-- joy:postmark:end -->", page)
+        self.assertIn("<!-- joy:postmark-year:start -->2026<!-- joy:postmark-year:end -->", page)
+
+    def test_apply_day_rejects_bad_date_before_rewriting(self):
+        for name, d in BAD_DATES.items():
+            with self.subTest(name):
+                with self.assertRaises(bi.BakeError):
+                    bi.apply_day(INDEX, d, dict(TODAY, date=d))
+
+    def test_dated_page_builder_uses_same_validator(self):
+        for name, d in BAD_DATES.items():
+            with self.subTest(name):
+                with self.assertRaises(og.PageError):
+                    og.bake(self.root, d)
+        self.assertIsNone(og.PAGE_RE.fullmatch("2026-11-11.html\n"))
+        self.assertIsNone(og.PAGE_RE.fullmatch("\uff12\uff10\uff12\uff16-11-11.html"))
+        self.assertIsNotNone(og.PAGE_RE.fullmatch("2026-11-11.html"))
+
+
 if __name__ == "__main__":
     unittest.main()
