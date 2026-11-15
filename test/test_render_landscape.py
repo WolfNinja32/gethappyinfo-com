@@ -239,7 +239,7 @@ class StepIsolationTest(unittest.TestCase):
         self.root = Path(self._tmp.name)
         (self.root / "scripts").mkdir()
         for f in ("render_share.py", "render_portrait.py", "render_landscape.py",
-                  "build_fb_handoff.py", "landscape_step.sh"):
+                  "build_fb_handoff.py", "bake_index.py", "landscape_step.sh"):
             shutil.copy2(REPO / "scripts" / f, self.root / "scripts" / f)
         (self.root / "render").symlink_to(REPO / "render")
         (self.root / "public").mkdir()
