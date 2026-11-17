@@ -82,8 +82,8 @@ GEN_LOG_FILE = ROOT / "data" / "generation-log.json"
 # Missing token → degrade; the daily postcard never blanks.
 WORKERS_AI_ACCOUNT = os.environ.get("CLOUDFLARE_ACCOUNT_ID", "")
 WORKERS_AI_URL = "https://api.cloudflare.com/client/v4/accounts/{account}/ai/run/{model}"
-WRITER_MODEL = "@cf/moonshotai/kimi-k2.6"
-WRITER_PARAMS = {"chat_template_kwargs": {"thinking": False}}  # K2.6 reasoning off
+WRITER_MODEL = "@cf/google/gemma-4-26b-a4b-it"
+WRITER_PARAMS = {"chat_template_kwargs": {"enable_thinking": False}}  # gemma-4 thinking off
 # Independent grounding reviewer — a DIFFERENT, non-reasoning model (so it can't hit the
 # token-blowup that disqualified reasoning models), chosen via bake-off: fast, clean JSON.
 REVIEW_MODEL = "@cf/mistralai/mistral-small-3.1-24b-instruct"
