@@ -46,6 +46,15 @@ class FbHandoffTest(unittest.TestCase):
     def read(self, name):
         return (self.root / "public" / "fb" / name).read_bytes().decode("utf-8")
 
+    def test_rejects_impossible_or_non_ascii_dates(self):
+        # SecurityJo SJ-1: same strict validator as bake_index (ASCII fullmatch + real date)
+        for d in ("2026-02-31", "2026-13-01", "2026-10-01\n",
+                  "\uff12\uff10\uff12\uff16-\uff11\uff10-\uff10\uff11"):
+            with self.subTest(d=d):
+                with self.assertRaises(SystemExit):
+                    self.run_build(date=d)
+        self.assertFalse((self.root / "public" / "fb" / "today.txt").exists())
+
     def test_default_uses_joy_line_exact_format(self):
         self.assertEqual(self.run_build(), 0)
         expected = (f"{LINE}\n\nPass it on ✉\nhttps://gethappyinfo.com/2026-10-01\n\n"

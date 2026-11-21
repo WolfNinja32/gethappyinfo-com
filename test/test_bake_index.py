@@ -34,6 +34,8 @@ INDEX = """<!doctype html>
 </head><body>
 <p class="micro-joy" id="task"><!-- joy:line:start -->Loading a little joy…<!-- joy:line:end --></p>
 <ul class="news" id="news"><!-- joy:story:start --><!-- joy:story:end --></ul>
+<text id="postmark-date"><!-- joy:postmark:start -->MAY 27<!-- joy:postmark:end --></text>
+<text id="postmark-year"><!-- joy:postmark-year:start -->2026<!-- joy:postmark-year:end --></text>
 </body></html>
 """
 TODAY = {"date": "2026-11-11", "line": "Say <thanks> & mean it.",
@@ -151,12 +153,37 @@ class BakeIndexTest(Scratch):
         self.assertNotIn("isBasedOn", page)
 
 
+
+    def test_bakes_postmark_matches_js_format(self):
+        # JS dateParts: "NOV 11" (no leading zero on the day) and year "2026"
+        self.run_main()
+        page = self.index()
+        self.assertIn("<!-- joy:postmark:start -->NOV 11<!-- joy:postmark:end -->", page)
+        self.assertIn("<!-- joy:postmark-year:start -->2026<!-- joy:postmark-year:end -->", page)
+        self.assertNotIn("MAY 27", page)
+
+    def test_postmark_drops_leading_zero_on_day(self):
+        (self.root / "public" / "joy.json").write_text(
+            json.dumps({"date": "2026-05-07", "line": "Hi.", "paragraph": "Story."}),
+            encoding="utf-8")
+        self.run_main()
+        page = self.index()
+        self.assertIn("<!-- joy:postmark:start -->MAY 7<!-- joy:postmark:end -->", page)
+        self.assertIn("<!-- joy:postmark-year:start -->2026<!-- joy:postmark-year:end -->", page)
+        self.assertNotIn("MAY 07", page)
+        self.assertNotIn("MAY 27", page)
+
+
 class DatedPageTest(Scratch):
     def test_dated_page_gets_own_day_and_canonical(self):
         bi.main([], repo=self.root)
         page, _ = og.bake(self.root, "2026-11-10", no_landscape=True)
         self.assertIn('rel="canonical" href="https://gethappyinfo.com/2026-11-10"', page)
         self.assertIn("Yesterday's line.<!-- joy:line:end -->", page)
+        self.assertIn("<!-- joy:postmark:start -->NOV 10<!-- joy:postmark:end -->", page)
+        self.assertIn("<!-- joy:postmark-year:start -->2026<!-- joy:postmark-year:end -->", page)
+        self.assertNotIn("NOV 11", page)
+        self.assertNotIn("MAY 27", page)
         self.assertNotIn("mean it", page)
         work = ld(page)["@graph"][2]
         self.assertEqual(work["url"], f"{SITE}/2026-11-10")
@@ -182,11 +209,18 @@ class RealIndexTest(unittest.TestCase):
         if bi.is_new_shape(joy):
             self.assertIn(html.escape(" ".join(joy["line"].split()), quote=False), page)
             self.assertGreater(len(visible_text(page)), 600)
+            labels = bi.postmark_labels(joy["date"])
+            self.assertIsNotNone(labels)
+            self.assertIn(f"<!-- joy:postmark:start -->{labels[0]}<!-- joy:postmark:end -->", page)
+            self.assertIn(f"<!-- joy:postmark-year:start -->{labels[1]}<!-- joy:postmark-year:end -->", page)
+            self.assertNotIn("MAY 27", page)
 
     def test_js_still_overwrites_same_targets(self):
         page = (REPO / "public" / "index.html").read_text(encoding="utf-8")
         self.assertIn("taskEl.textContent = data.line", page)
         self.assertIn("newsEl.innerHTML = '<li style=\"border:0;padding:0;opacity:1;animation:none\">'", page)
+        self.assertIn("postmarkDate.textContent = parts.monthShort + ' ' + parts.day", page)
+        self.assertIn("postmarkYear.textContent = parts.year", page)
 
 
 
@@ -273,6 +307,92 @@ class SafeUrlAndSanitizeTest(unittest.TestCase):
         self.assertNotIn("\n", payload.strip())
         self.assertNotIn("::", payload)
         self.assertIn("injected-command", payload)
+
+
+
+class PostmarkLabelsTest(unittest.TestCase):
+    def test_matches_js_dateParts(self):
+        self.assertEqual(bi.postmark_labels("2026-11-11"), ("NOV 11", "2026"))
+        self.assertEqual(bi.postmark_labels("2026-05-27"), ("MAY 27", "2026"))
+        self.assertEqual(bi.postmark_labels("2026-05-07"), ("MAY 7", "2026"))
+        self.assertEqual(bi.postmark_labels("2026-01-01"), ("JAN 1", "2026"))
+        self.assertEqual(bi.postmark_labels("2027-12-09"), ("DEC 9", "2027"))
+
+    def test_rejects_bad_dates(self):
+        for d in (None, "", "11-11-2026", "2026/11/11", "today"):
+            self.assertIsNone(bi.postmark_labels(d), msg=repr(d))
+
+    def test_out_of_range_month_raises_or_none(self):
+        # DATE_RE accepts 2026-13-01; don't crash the bake.
+        try:
+            got = bi.postmark_labels("2026-13-01")
+        except IndexError:
+            self.fail("postmark_labels must not raise on a DATE_RE-matching but invalid month")
+        self.assertIsNone(got)
+
+
+# SecurityJo SJ-1 (PR #48): impossible / non-ASCII / trailing-newline dates.
+BAD_DATES = {
+    "feb31": "2026-02-31",
+    "month13": "2026-13-01",
+    "trailing_newline": "2026-11-11\n",
+    "fullwidth_digits": "\uff12\uff10\uff12\uff16-\uff11\uff11-\uff11\uff11",
+    "year_zero": "0000-01-01",
+}
+
+
+class StrictDateTest(Scratch):
+    def test_valid_date_accepts_real_dates(self):
+        for d in ("2026-11-11", "2024-02-29", "2026-05-07"):
+            self.assertEqual(bi.valid_date(d), d)
+            self.assertIsNotNone(bi.postmark_labels(d))
+        self.assertEqual(bi.postmark_labels("2024-02-29"), ("FEB 29", "2024"))
+
+    def test_valid_date_rejects_bad_dates(self):
+        for name, d in BAD_DATES.items():
+            with self.subTest(name):
+                self.assertIsNone(bi.valid_date(d))
+                self.assertIsNone(bi.postmark_labels(d))
+        for d in (None, 20261111, "", "2025-02-29", " 2026-11-11", "2026-11-1"):
+            self.assertIsNone(bi.valid_date(d), msg=repr(d))
+
+    def test_bad_joy_date_writes_nothing_and_warns_sanitized(self):
+        before = self.index()
+        for name, d in BAD_DATES.items():
+            with self.subTest(name):
+                (self.root / "public" / "joy.json").write_text(
+                    json.dumps(dict(TODAY, date=d)), encoding="utf-8")
+                code, out = self.run_main()
+                self.assertEqual(code, 1)
+                self.assertIn("::warning::index bake failed:", out)
+                payload = out.split("::warning::index bake failed:", 1)[1]
+                self.assertNotIn("\n", payload.strip())
+                self.assertNotIn("::", payload)
+                self.assertIn("invalid date", payload)
+                self.assertEqual(self.index(), before)  # postmark (and every region) untouched
+                self.assertIn("<!-- joy:postmark:start -->MAY 27<!-- joy:postmark:end -->", self.index())
+
+    def test_valid_date_still_bakes_postmark(self):
+        code, _ = self.run_main()
+        self.assertEqual(code, 0)
+        page = self.index()
+        self.assertIn("<!-- joy:postmark:start -->NOV 11<!-- joy:postmark:end -->", page)
+        self.assertIn("<!-- joy:postmark-year:start -->2026<!-- joy:postmark-year:end -->", page)
+
+    def test_apply_day_rejects_bad_date_before_rewriting(self):
+        for name, d in BAD_DATES.items():
+            with self.subTest(name):
+                with self.assertRaises(bi.BakeError):
+                    bi.apply_day(INDEX, d, dict(TODAY, date=d))
+
+    def test_dated_page_builder_uses_same_validator(self):
+        for name, d in BAD_DATES.items():
+            with self.subTest(name):
+                with self.assertRaises(og.PageError):
+                    og.bake(self.root, d)
+        self.assertIsNone(og.PAGE_RE.fullmatch("2026-11-11.html\n"))
+        self.assertIsNone(og.PAGE_RE.fullmatch("\uff12\uff10\uff12\uff16-11-11.html"))
+        self.assertIsNotNone(og.PAGE_RE.fullmatch("2026-11-11.html"))
 
 
 if __name__ == "__main__":
